@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createTestRecognizer } from '../test/support/publicPageFetcher';
 import { openTestRepository } from '../test/support/testRepository';
 import type { OpenTestRepositoryOptions, TestRepository } from '../test/support/testRepository';
 import { App } from './App';
@@ -15,7 +16,8 @@ afterEach(() => {
 
 function openApp(options: OpenTestRepositoryOptions = {}) {
   opened = openTestRepository(options);
-  const view = render(<App repository={opened.repository} />);
+  const { recognizer } = createTestRecognizer();
+  const view = render(<App repository={opened.repository} recognizer={recognizer} />);
   return { ...opened, ...view };
 }
 
