@@ -10,16 +10,16 @@ import type { OpenTestRepositoryOptions } from '../test/support/testRepository';
 import { App } from './App';
 
 const databases: ReturnType<typeof openTestRepository>[] = [];
+const views: ReturnType<typeof render>[] = [];
 
 function openApp(options: OpenTestRepositoryOptions = {}) {
   const database = openTestRepository(options);
   databases.push(database);
-  return {
-    ...database,
-    ...render(
-      <App repository={database.repository} recognizer={createTestRecognizer().recognizer} />,
-    ),
-  };
+  const view = render(
+    <App repository={database.repository} recognizer={createTestRecognizer().recognizer} />,
+  );
+  views.push(view);
+  return { ...database, ...view };
 }
 
 const userSetup = () => userEvent.setup();
@@ -32,6 +32,7 @@ async function openSettings(user: User) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  for (const view of views.splice(0)) view.unmount();
   for (const database of databases.splice(0)) database.dispose();
 });
 

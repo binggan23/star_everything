@@ -8,8 +8,10 @@ import type { OpenTestRepositoryOptions, TestRepository } from '../test/support/
 import { App } from './App';
 
 let opened: TestRepository | undefined;
+const views: ReturnType<typeof render>[] = [];
 
 afterEach(() => {
+  for (const view of views.splice(0)) view.unmount();
   opened?.dispose();
   opened = undefined;
 });
@@ -18,6 +20,7 @@ function openApp(options: OpenTestRepositoryOptions = {}) {
   opened = openTestRepository(options);
   const { recognizer } = createTestRecognizer();
   const view = render(<App repository={opened.repository} recognizer={recognizer} />);
+  views.push(view);
   return { ...opened, ...view };
 }
 
