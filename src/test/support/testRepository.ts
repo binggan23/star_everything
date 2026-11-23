@@ -46,7 +46,7 @@ export function openTestRepository(options: OpenTestRepositoryOptions = {}): Tes
     close,
     dispose: () => {
       close();
-      rmSync(directory, { recursive: true, force: true });
+      rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     },
   };
 }
