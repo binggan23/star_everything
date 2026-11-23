@@ -1,0 +1,17 @@
+[package]
+name = "star-everything"
+version = "0.1.0"
+description = "Local-first personal collection for URLs and authors"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "star_everything_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
