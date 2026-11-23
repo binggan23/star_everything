@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -169,5 +169,392 @@ describe('collection', () => {
     await user.click(screen.getByRole('button', { name: '取消' }));
 
     expect(await screen.findByText('老番茄')).toBeInTheDocument();
+  });
+});
+
+describe('labels and discovery', () => {
+  it('offers the seeded platform labels as filters', async () => {
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    expect(await screen.findByRole('checkbox', { name: 'Bilibili' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '抖音' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '小红书' })).toBeInTheDocument();
+  });
+
+  it('adds, renames, and removes platform labels', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.click(screen.getByRole('button', { name: '管理平台标签' }));
+    await user.type(screen.getByLabelText('新平台标签'), 'YouTube');
+    await user.click(screen.getByRole('button', { name: '添加平台标签' }));
+    expect(await screen.findByRole('checkbox', { name: 'YouTube' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '重命名 抖音' }));
+    const nameField = screen.getByLabelText('平台标签名称');
+    await user.clear(nameField);
+    await user.type(nameField, 'Douyin');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(await screen.findByRole('checkbox', { name: 'Douyin' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: '抖音' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '删除 Bilibili' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox', { name: 'Bilibili' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('checkbox', { name: 'Douyin' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '小红书' })).toBeInTheDocument();
+  });
+
+  it('saves a titled entry with a platform label and content labels', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('标题'), 'React 教程');
+    await user.type(screen.getByLabelText('网址'), 'https://www.bilibili.com/video/BV1react');
+    await user.type(screen.getByLabelText('作者'), 'Alice');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: 'Bilibili' }),
+    );
+    await user.type(screen.getByLabelText('内容标签'), '#前端 #React');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+
+    const list = await screen.findByRole('list', { name: '收藏条目' });
+    expect(within(list).getByText('React 教程')).toBeInTheDocument();
+    expect(within(list).getByText('https://www.bilibili.com/video/BV1react')).toBeInTheDocument();
+    expect(within(list).getByText('Alice')).toBeInTheDocument();
+    expect(within(list).getByText('Bilibili')).toBeInTheDocument();
+    expect(within(list).getByText('#前端')).toBeInTheDocument();
+    expect(within(list).getByText('#React')).toBeInTheDocument();
+  });
+
+  it('offers content labels used by saved entries as reusable filters', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    for (const [title, author, labels] of [
+      ['第一篇', '作者一', '#音乐 #生活'],
+      ['第二篇', '作者二', '#音乐'],
+    ] as const) {
+      await user.type(screen.getByLabelText('标题'), title);
+      await user.type(screen.getByLabelText('作者'), author);
+      await user.type(screen.getByLabelText('内容标签'), labels);
+      await user.click(screen.getByRole('button', { name: '保存条目' }));
+      await screen.findByText(title);
+    }
+
+    expect(await screen.findByRole('checkbox', { name: '#音乐' })).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox', { name: '#音乐' })).toHaveLength(1);
+    expect(screen.getByRole('checkbox', { name: '#生活' })).toBeInTheDocument();
+  });
+
+  it('keeps content labels available until the last use is removed', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    for (const [title, author, labels] of [
+      ['第一篇', '作者一', '#音乐 #生活'],
+      ['第二篇', '作者二', '#音乐'],
+    ] as const) {
+      await user.type(screen.getByLabelText('标题'), title);
+      await user.type(screen.getByLabelText('作者'), author);
+      await user.type(screen.getByLabelText('内容标签'), labels);
+      await user.click(screen.getByRole('button', { name: '保存条目' }));
+      await screen.findByText(title);
+    }
+
+    const first = screen.getByText('第一篇').closest('li');
+    if (!first) throw new Error('missing first entry');
+    await user.click(within(first).getByRole('button', { name: '编辑' }));
+    await user.clear(screen.getByLabelText('内容标签'));
+    await user.click(screen.getByRole('button', { name: '保存修改' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox', { name: '#生活' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('checkbox', { name: '#音乐' })).toBeInTheDocument();
+
+    const second = screen.getByText('第二篇').closest('li');
+    if (!second) throw new Error('missing second entry');
+    await user.click(within(second).getByRole('button', { name: '编辑' }));
+    await user.clear(screen.getByLabelText('内容标签'));
+    await user.click(screen.getByRole('button', { name: '保存修改' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox', { name: '#音乐' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('第一篇')).toBeInTheDocument();
+    expect(screen.getByText('第二篇')).toBeInTheDocument();
+  });
+
+  it('searches titles, URLs, authors, platforms, and content labels case-insensitively', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('标题'), 'React 深入');
+    await user.type(screen.getByLabelText('网址'), 'https://Example.com/Course');
+    await user.type(screen.getByLabelText('作者'), 'Alice');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: 'Bilibili' }),
+    );
+    await user.type(screen.getByLabelText('内容标签'), '#Frontend');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('React 深入');
+
+    await user.type(screen.getByLabelText('标题'), '剪辑技巧');
+    await user.type(screen.getByLabelText('作者'), '阿星');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: '抖音' }),
+    );
+    await user.type(screen.getByLabelText('内容标签'), '#视频');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('剪辑技巧');
+
+    const search = screen.getByLabelText('搜索');
+    for (const query of ['react', 'example.COM', 'alice', 'bilibili', 'frontend']) {
+      await user.clear(search);
+      await user.type(search, query);
+      expect(screen.getByText('React 深入')).toBeInTheDocument();
+      expect(screen.queryByText('剪辑技巧')).not.toBeInTheDocument();
+    }
+  });
+
+  it('shows an empty-result state and clears search and filters without changing entries', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('标题'), 'React 入门');
+    await user.type(screen.getByLabelText('作者'), 'Alice');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: 'Bilibili' }),
+    );
+    await user.type(screen.getByLabelText('内容标签'), '#前端');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('React 入门');
+
+    await user.type(screen.getByLabelText('标题'), '剪辑技巧');
+    await user.type(screen.getByLabelText('作者'), '阿星');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: '抖音' }),
+    );
+    await user.type(screen.getByLabelText('内容标签'), '#视频');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('剪辑技巧');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Bilibili' }));
+    expect(screen.getByText('React 入门')).toBeInTheDocument();
+    expect(screen.queryByText('剪辑技巧')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: '#视频' }));
+    expect(await screen.findByText('没有符合条件的条目。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '清除筛选' }));
+    expect(await screen.findByText('React 入门')).toBeInTheDocument();
+    expect(screen.getByText('剪辑技巧')).toBeInTheDocument();
+    expect(screen.queryByText('没有符合条件的条目。')).not.toBeInTheDocument();
+
+    const search = screen.getByLabelText('搜索');
+    await user.type(search, '不存在的关键词');
+    expect(await screen.findByText('没有符合条件的条目。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '清除筛选' }));
+    expect(await screen.findByText('React 入门')).toBeInTheDocument();
+    expect(screen.getByText('剪辑技巧')).toBeInTheDocument();
+    expect(search).toHaveValue('');
+  });
+
+  it('combines selected values with OR inside a dimension and AND across dimensions', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    const entries = [
+      { title: 'React 前端', author: 'Alice', platform: 'Bilibili', labels: '#前端' },
+      { title: '剪辑视频', author: '阿星', platform: '抖音', labels: '#视频' },
+      { title: '今日穿搭', author: '小美', platform: '小红书', labels: '#时尚' },
+      { title: 'React 进阶', author: 'Bob', platform: '抖音', labels: '#前端' },
+    ] as const;
+
+    for (const entry of entries) {
+      await user.type(screen.getByLabelText('标题'), entry.title);
+      await user.type(screen.getByLabelText('作者'), entry.author);
+      await user.selectOptions(
+        screen.getByLabelText('平台标签'),
+        screen.getByRole('option', { name: entry.platform }),
+      );
+      await user.type(screen.getByLabelText('内容标签'), entry.labels);
+      await user.click(screen.getByRole('button', { name: '保存条目' }));
+      await screen.findByText(entry.title);
+    }
+
+    await user.click(screen.getByRole('checkbox', { name: 'Bilibili' }));
+    await user.click(screen.getByRole('checkbox', { name: '抖音' }));
+
+    expect(screen.getByText('React 前端')).toBeInTheDocument();
+    expect(screen.getByText('剪辑视频')).toBeInTheDocument();
+    expect(screen.getByText('React 进阶')).toBeInTheDocument();
+    expect(screen.queryByText('今日穿搭')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: '#前端' }));
+    expect(screen.getByText('React 前端')).toBeInTheDocument();
+    expect(screen.getByText('React 进阶')).toBeInTheDocument();
+    expect(screen.queryByText('剪辑视频')).not.toBeInTheDocument();
+    expect(screen.queryByText('今日穿搭')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: '#视频' }));
+    expect(screen.getByText('React 前端')).toBeInTheDocument();
+    expect(screen.getByText('剪辑视频')).toBeInTheDocument();
+    expect(screen.getByText('React 进阶')).toBeInTheDocument();
+    expect(screen.queryByText('今日穿搭')).not.toBeInTheDocument();
+  });
+
+  it('updates entries when a platform label is renamed and keeps them when it is removed', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('标题'), '一期作品');
+    await user.type(screen.getByLabelText('作者'), 'Alice');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: 'Bilibili' }),
+    );
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('一期作品');
+
+    await user.click(screen.getByRole('button', { name: '管理平台标签' }));
+    await user.click(screen.getByRole('button', { name: '重命名 Bilibili' }));
+    const nameField = screen.getByLabelText('平台标签名称');
+    await user.clear(nameField);
+    await user.type(nameField, 'B站');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    const list = await screen.findByRole('list', { name: '收藏条目' });
+    expect(within(list).getByText('B站')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '删除 B站' }));
+
+    await waitFor(() => expect(within(list).queryByText('B站')).not.toBeInTheDocument());
+    expect(screen.getByText('一期作品')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'B站' })).not.toBeInTheDocument();
+  });
+
+  it('keeps custom platform labels and content labels after a restart', async () => {
+    const user = userEvent.setup();
+    const first = openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.click(screen.getByRole('button', { name: '管理平台标签' }));
+    await user.type(screen.getByLabelText('新平台标签'), 'YouTube');
+    await user.click(screen.getByRole('button', { name: '添加平台标签' }));
+    await screen.findByRole('checkbox', { name: 'YouTube' });
+
+    await user.type(screen.getByLabelText('标题'), '旅行 Vlog');
+    await user.type(screen.getByLabelText('作者'), '小林');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: 'YouTube' }),
+    );
+    await user.type(screen.getByLabelText('内容标签'), '#旅行');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('旅行 Vlog');
+
+    first.unmount();
+    first.close();
+    opened = undefined;
+
+    openApp({ databasePath: first.databasePath, directory: first.directory });
+
+    const list = await screen.findByRole('list', { name: '收藏条目' });
+    expect(within(list).getByText('YouTube')).toBeInTheDocument();
+    expect(within(list).getByText('#旅行')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'YouTube' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '#旅行' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Bilibili' })).toBeInTheDocument();
+  });
+
+  it('drops an active filter when its platform label is removed', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('标题'), '留在这里');
+    await user.type(screen.getByLabelText('作者'), 'Alice');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: 'Bilibili' }),
+    );
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('留在这里');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Bilibili' }));
+    await user.click(screen.getByRole('button', { name: '管理平台标签' }));
+    await user.click(screen.getByRole('button', { name: '删除 Bilibili' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox', { name: 'Bilibili' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('留在这里')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '清除筛选' })).not.toBeInTheDocument();
+  });
+
+  it('rejects empty and duplicate platform label names', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.click(screen.getByRole('button', { name: '管理平台标签' }));
+    await user.click(screen.getByRole('button', { name: '添加平台标签' }));
+    expect(await screen.findByText('请输入平台标签名称。')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('新平台标签'), 'bilibili');
+    await user.click(screen.getByRole('button', { name: '添加平台标签' }));
+    expect(await screen.findByText('平台标签已存在。')).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox', { name: 'Bilibili' })).toHaveLength(1);
+  });
+
+  it('keeps editing an entry after its platform label is removed', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('标题'), '保留作品');
+    await user.type(screen.getByLabelText('作者'), 'Alice');
+    await user.selectOptions(
+      screen.getByLabelText('平台标签'),
+      screen.getByRole('option', { name: 'Bilibili' }),
+    );
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('保留作品');
+
+    await user.click(screen.getByRole('button', { name: '编辑' }));
+    await user.click(screen.getByRole('button', { name: '管理平台标签' }));
+    await user.click(screen.getByRole('button', { name: '删除 Bilibili' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox', { name: 'Bilibili' })).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: '保存修改' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '保存修改' })).not.toBeInTheDocument(),
+    );
+
+    const list = screen.getByRole('list', { name: '收藏条目' });
+    expect(within(list).getByText('保留作品')).toBeInTheDocument();
+    expect(within(list).queryByText('Bilibili')).not.toBeInTheDocument();
   });
 });
