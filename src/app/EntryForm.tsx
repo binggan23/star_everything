@@ -1,14 +1,19 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { folderPath } from '../domain/collection';
+import type { Folder } from '../data/collectionRepository';
+
 export type EntryDraft = {
   url: string;
   author: string;
+  folderIds: string[];
 };
 
 export type SubmitResult = { saved: true } | { saved: false; error: string };
 
 export type EntryFormProps = {
   initial: EntryDraft;
+  folders: readonly Folder[];
   submitLabel: string;
   onSubmit: (draft: EntryDraft) => Promise<SubmitResult>;
   onCancel?: () => void;
@@ -17,6 +22,7 @@ export type EntryFormProps = {
 
 export function EntryForm({
   initial,
+  folders,
   submitLabel,
   onSubmit,
   onCancel,
@@ -24,6 +30,7 @@ export function EntryForm({
 }: EntryFormProps) {
   const urlId = useId();
   const authorId = useId();
+  const folderId = useId();
   const errorId = useId();
   const urlRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<EntryDraft>(initial);
@@ -33,8 +40,18 @@ export function EntryForm({
     if (error !== null) urlRef.current?.focus();
   }, [error]);
 
-  function update(field: keyof EntryDraft, value: string) {
+  function update(field: 'url' | 'author', value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
+    setError(null);
+  }
+
+  function toggleFolder(folderId: string) {
+    setDraft((current) => ({
+      ...current,
+      folderIds: current.folderIds.includes(folderId)
+        ? current.folderIds.filter((id) => id !== folderId)
+        : [...current.folderIds, folderId],
+    }));
     setError(null);
   }
 
@@ -86,6 +103,24 @@ export function EntryForm({
           onChange={(event) => update('author', event.target.value)}
         />
       </div>
+
+      <fieldset className="field folder-field">
+        <legend>收藏夹</legend>
+        {folders.map((folder) => {
+          const id = `${folderId}-${folder.id}`;
+          return (
+            <span key={folder.id} className="folder-choice">
+              <input
+                id={id}
+                type="checkbox"
+                checked={draft.folderIds.includes(folder.id)}
+                onChange={() => toggleFolder(folder.id)}
+              />
+              <label htmlFor={id}>{folderPath(folders, folder.id)}</label>
+            </span>
+          );
+        })}
+      </fieldset>
 
       {invalid && (
         <p id={errorId} className="form-error">
