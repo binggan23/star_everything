@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "overrides": {
+    "minimatch": "11.0.9",
+    "qs": "6.17.1"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -11,7 +15,10 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "audit:production": "node scripts/audit-production.mjs",
     "mutation:check": "stryker run",
+    "mutation:check:incremental": "stryker run --incremental",
+    "mutation:check:labels": "stryker run --mutate src/domain/labels.ts",
     "tauri": "tauri"
   },
   "dependencies": {

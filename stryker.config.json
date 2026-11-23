@@ -15,6 +15,11 @@
     "related": true
   },
   "reporters": ["clear-text", "progress"],
+  "incremental": true,
+  "incrementalFile": "reports/stryker-incremental.json",
+  "cleanTempDir": "always",
+  "timeoutMS": 30000,
+  "timeoutFactor": 2,
   "thresholds": {
     "break": null
   }

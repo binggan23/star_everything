@@ -15,6 +15,10 @@ npm run tauri dev           # 桌面应用
 npm test                    # Vitest + React Testing Library
 npm run build               # 类型检查 + 前端构建
 npm run format:check        # Prettier
+npm run audit:production   # production dependency audit
+npm run mutation:check     # full TypeScript mutation run
+npm run mutation:check:incremental
+npm run mutation:check:labels # quick focused run
 npm run tauri build -- --bundles deb
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
@@ -27,3 +31,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
   - 测试适配器：`src/test/support/`（Node 内置 `node:sqlite`，使用真实 SQLite）。
 - `src/app/`：React 界面；`App` 通过 `CollectionRepository` 注入数据层。
 - `src-tauri/`：Tauri 2 桌面壳，仅承载原生启动与 SQL 插件桥接。
+
+## CI
+
+`.github/workflows/ci.yml` 在 Linux 上运行前端、Rust、格式和生产依赖检查并构建 `.deb`；在 Windows runner 上构建并上传 NSIS `.exe`；独立 mutation job 运行完整 TypeScript 变异测试。
