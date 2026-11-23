@@ -24,3 +24,12 @@ Single-context: one `GLOSSARY.md` plus `docs/adr/` at the repo root. See `docs/a
   - 涉及UI或功能领域如:UI/布局、性能与可访问性、现代浏览器API、安全与数据、国际化时
     务必调用modern-web-guidance skills
 - 进行UI质量提升，审查、排版、布局、动效和可访问性等任务，原型制作时务必调用/impeccable这个插件(Extensions),若用户没有本插件则调用impeccable skills
+
+## 子代理调用原则
+
+- 当执行探索任务时调用Explore
+- 当执行implement/implement-spec时调用coder
+- 当执行code-review时调用code-reviewer
+- 当编写前端时调用ftagent
+- 当进行fix任务时调用fixagent
+
