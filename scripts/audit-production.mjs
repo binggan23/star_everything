@@ -4,7 +4,8 @@ const npm = process.env.npm_execpath ?? 'npm';
 const environment = { ...process.env };
 delete environment.npm_config_allow_scripts;
 
-const result = spawnSync(process.execPath, [npm, 'audit', '--omit=dev', '--ignore-scripts'], {
+const auditArgs = process.argv.includes('--full') ? [] : ['--omit=dev'];
+const result = spawnSync(process.execPath, [npm, 'audit', ...auditArgs, '--ignore-scripts'], {
   env: environment,
   stdio: 'inherit',
 });

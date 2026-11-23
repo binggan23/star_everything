@@ -33,12 +33,13 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.100.0
           components: rustfmt
 
       - name: Cache Rust dependencies
@@ -51,6 +52,9 @@ jobs:
 
       - name: Production dependency audit
         run: npm run audit:production
+
+      - name: Full dependency audit
+        run: npm run audit:full
 
       - name: Test
         run: npm test
@@ -87,11 +91,13 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.100.0
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -131,7 +137,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies

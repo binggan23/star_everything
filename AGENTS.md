@@ -31,4 +31,8 @@ Single-context: one `GLOSSARY.md` plus `docs/adr/` at the repo root. See `docs/a
 - 当执行implement/implement-spec时调用coder
 - 当执行code-review时调用code-reviewer
 - 当编写前端时调用ftagent
-- 当进行fix任务时调用fixagent
+- 当进行fix任务时调用fixer
+
+## 开发验证
+
+- 执行测试、构建、格式、Rust、依赖审计、变异测试或桌面打包任务时，先读取 [`docs/agents/verification.md`](docs/agents/verification.md)；该文件是本地命令与 CI 职责的单一入口。
