@@ -32,4 +32,3 @@ Single-context: one `GLOSSARY.md` plus `docs/adr/` at the repo root. See `docs/a
 - 当执行code-review时调用code-reviewer
 - 当编写前端时调用ftagent
 - 当进行fix任务时调用fixagent
-
