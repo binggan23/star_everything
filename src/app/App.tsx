@@ -14,12 +14,15 @@ import type {
 import { buildFolderTree, folderPath, HOME_FOLDER_ID } from '../domain/collection';
 import { matchesDiscovery } from '../domain/discovery';
 import type { MetadataRecognizer } from '../domain/metadata';
+import type { Settings } from '../domain/settings';
 import { formatContentLabels } from '../domain/labels';
+import { BackupPanel } from './BackupPanel';
 import { EntryForm } from './EntryForm';
 import type { EntryDraft, SubmitResult } from './EntryForm';
 import { FolderPanel } from './FolderPanel';
 import { FolderTree } from './FolderTree';
 import { PlatformLabelManager } from './PlatformLabelManager';
+import { SettingsPanel } from './SettingsPanel';
 import { TrashPanel } from './TrashPanel';
 
 type Status = 'loading' | 'ready' | 'failed';
@@ -63,12 +66,15 @@ export function App({
   recognizer: MetadataRecognizer;
 }) {
   const searchId = useId();
+  const labelManagerId = useId();
   const [status, setStatus] = useState<Status>('loading');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [platformLabels, setPlatformLabels] = useState<PlatformLabel[]>([]);
   const [contentLabels, setContentLabels] = useState<ContentLabel[]>([]);
   const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [viewingSettings, setViewingSettings] = useState(false);
   const [viewingTrash, setViewingTrash] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,6 +83,7 @@ export function App({
   const [managingLabels, setManagingLabels] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [replaceCount, setReplaceCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,22 +91,30 @@ export function App({
     async function load() {
       try {
         await repository.init();
-        const [nextEntries, nextFolders, nextPlatformLabels, nextContentLabels, nextTrashItems] =
-          await Promise.all([
-            repository.listEntries(
-              selectedFolderId === null ? {} : { folderIds: [selectedFolderId] },
-            ),
-            repository.listFolders(),
-            repository.listPlatformLabels(),
-            repository.listContentLabels(),
-            repository.listTrash(),
-          ]);
+        const [
+          nextEntries,
+          nextFolders,
+          nextPlatformLabels,
+          nextContentLabels,
+          nextTrashItems,
+          nextSettings,
+        ] = await Promise.all([
+          repository.listEntries(
+            selectedFolderId === null ? {} : { folderIds: [selectedFolderId] },
+          ),
+          repository.listFolders(),
+          repository.listPlatformLabels(),
+          repository.listContentLabels(),
+          repository.listTrash(),
+          repository.getSettings(),
+        ]);
         if (cancelled) return;
         setEntries(nextEntries);
         setFolders(nextFolders);
         setPlatformLabels(nextPlatformLabels);
         setContentLabels(nextContentLabels);
         setTrashItems(nextTrashItems);
+        setSettings(nextSettings);
         setPlatformFilter((current) =>
           current.filter((id) => nextPlatformLabels.some((label) => label.id === id)),
         );
@@ -119,6 +134,21 @@ export function App({
       cancelled = true;
     };
   }, [repository, selectedFolderId, viewingTrash, reloadKey]);
+
+  function openTrash() {
+    setViewingSettings(false);
+    setViewingTrash(true);
+    setSelectedFolderId(null);
+    setEditingId(null);
+  }
+
+  const theme = settings?.theme ?? 'system';
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [theme]);
 
   const saveEntry = useCallback(
     async (draft: EntryDraft): Promise<SubmitResult> => {
@@ -247,7 +277,7 @@ export function App({
     setReloadKey((key) => key + 1);
   }, [repository]);
 
-  if (status === 'loading') {
+  if (status === 'loading' || (status === 'ready' && settings === null)) {
     return (
       <p className="status" role="status">
         加载中…
@@ -255,7 +285,7 @@ export function App({
     );
   }
 
-  if (status === 'failed') {
+  if (status === 'failed' || settings === null) {
     return (
       <p className="status" role="alert">
         无法读取本地数据，请重新打开应用。
@@ -283,15 +313,39 @@ export function App({
   );
   const searchActive =
     searchQuery.trim() !== '' || platformFilter.length > 0 || contentFilter.length > 0;
-  const heading = viewingTrash
-    ? '回收站'
-    : selectedFolder === undefined
-      ? '全部条目'
-      : folderPath(folders, selectedFolder.id);
+  const heading = viewingSettings
+    ? '设置'
+    : viewingTrash
+      ? '回收站'
+      : selectedFolder === undefined
+        ? '全部条目'
+        : folderPath(folders, selectedFolder.id);
   const emptyMessage =
     entries.length === 0 && !searchActive && selectedFolder === undefined
       ? '还没有收藏条目。'
       : '没有符合条件的条目。';
+
+  const labelManagerToggle = (
+    <button
+      type="button"
+      className="secondary label-manager-toggle"
+      aria-expanded={managingLabels}
+      aria-controls={labelManagerId}
+      onClick={() => setManagingLabels((current) => !current)}
+    >
+      管理平台标签
+    </button>
+  );
+  const labelManager = managingLabels && (
+    <div id={labelManagerId}>
+      <PlatformLabelManager
+        labels={platformLabels}
+        onCreate={createPlatformLabel}
+        onRename={renamePlatformLabel}
+        onDelete={deletePlatformLabel}
+      />
+    </div>
+  );
 
   return (
     <div className="app">
@@ -300,8 +354,11 @@ export function App({
         <button
           type="button"
           className="nav-item"
-          aria-current={!viewingTrash && selectedFolderId === null ? 'page' : undefined}
+          aria-current={
+            !viewingSettings && !viewingTrash && selectedFolderId === null ? 'page' : undefined
+          }
           onClick={() => {
+            setViewingSettings(false);
             setViewingTrash(false);
             setSelectedFolderId(null);
             setEditingId(null);
@@ -311,8 +368,9 @@ export function App({
         </button>
         <FolderTree
           nodes={buildFolderTree(folders)}
-          selectedId={viewingTrash ? null : selectedFolderId}
+          selectedId={viewingTrash || viewingSettings ? null : selectedFolderId}
           onSelect={(folderId) => {
+            setViewingSettings(false);
             setViewingTrash(false);
             setSelectedFolderId(folderId);
             setEditingId(null);
@@ -322,20 +380,64 @@ export function App({
           type="button"
           className="nav-item"
           aria-current={viewingTrash ? 'page' : undefined}
+          onClick={openTrash}
+        >
+          回收站
+        </button>
+        <button
+          type="button"
+          className="nav-item"
+          aria-current={viewingSettings ? 'page' : undefined}
           onClick={() => {
-            setViewingTrash(true);
+            setViewingSettings(true);
+            setViewingTrash(false);
             setSelectedFolderId(null);
             setEditingId(null);
           }}
         >
-          回收站
+          设置
         </button>
       </nav>
 
       <main className="content">
         <h1>{heading}</h1>
 
-        {viewingTrash ? (
+        {viewingSettings ? (
+          <>
+            <SettingsPanel
+              key={replaceCount}
+              settings={settings}
+              onSave={async (next) => {
+                await repository.saveSettings(next);
+                setSettings(next);
+              }}
+            />
+            <BackupPanel
+              onExport={repository.exportBackup}
+              onImport={async (backup, mode) => {
+                await repository.importBackup(backup, mode);
+                if (mode === 'replace') {
+                  setSettings(backup.settings);
+                  setReplaceCount((count) => count + 1);
+                  setSearchQuery('');
+                  setPlatformFilter([]);
+                  setContentFilter([]);
+                }
+                setReloadKey((key) => key + 1);
+              }}
+            />
+            <section className="settings-section">
+              <h2>管理</h2>
+              <div className="settings-options">
+                {labelManagerToggle}
+                <button type="button" className="secondary" onClick={openTrash}>
+                  管理回收站
+                </button>
+              </div>
+              {labelManager}
+            </section>
+          </>
+        ) : viewingTrash ? (
           <TrashPanel
             items={trashItems}
             onRestore={(id) => void restoreTrashItem(id)}
@@ -446,32 +548,14 @@ export function App({
               )}
             </form>
 
-            <button
-              type="button"
-              className="secondary label-manager-toggle"
-              aria-expanded={managingLabels}
-              aria-controls="platform-label-manager"
-              onClick={() => setManagingLabels((current) => !current)}
-            >
-              管理平台标签
-            </button>
-
-            {managingLabels && (
-              <div id="platform-label-manager">
-                <PlatformLabelManager
-                  labels={platformLabels}
-                  onCreate={createPlatformLabel}
-                  onRename={renamePlatformLabel}
-                  onDelete={deletePlatformLabel}
-                />
-              </div>
-            )}
+            {labelManagerToggle}
+            {labelManager}
 
             <EntryForm
               key={`${editingEntry?.id ?? 'new-entry'}-${selectedFolderId ?? 'all'}`}
               folders={folders}
               platformLabels={platformLabels}
-              recognizer={recognizer}
+              recognizer={settings.recognizeMetadata ? recognizer : null}
               initial={
                 editingEntry === null
                   ? emptyDraft(selectedFolderId ?? HOME_FOLDER_ID)

@@ -1,3 +1,4 @@
+import { backupStatements } from './backupStore';
 import { HOME_FOLDER_ID, HOME_FOLDER_NAME } from '../domain/collection';
 
 export type MigrationColumn = {
@@ -110,6 +111,18 @@ export const migrations: readonly Migration[] = [
         column: 'trash_group_id',
         definition: 'TEXT REFERENCES trash_groups (id) ON DELETE CASCADE',
       },
+    ],
+  },
+  {
+    version: 5,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        theme TEXT NOT NULL CHECK (theme IN ('system', 'light', 'dark')),
+        recognize_metadata INTEGER NOT NULL CHECK (recognize_metadata IN (0, 1))
+      )`,
+      `INSERT OR IGNORE INTO settings (id, theme, recognize_metadata) VALUES (1, 'system', 1)`,
+      ...backupStatements,
     ],
   },
 ];
