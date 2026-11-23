@@ -128,11 +128,6 @@ function additions<T extends { id: string }>(local: T[], incoming: T[]): T[] {
   return incoming.filter((row) => !ids.has(row.id));
 }
 
-// SQLite's NOCASE label indexes fold ASCII only.
-function labelKey(name: string): string {
-  return name.replace(/[A-Z]/g, (char) => char.toLowerCase());
-}
-
 function unique<T>(rows: T[], key: (row: T) => string): boolean {
   return new Set(rows.map(key)).size === rows.length;
 }
@@ -152,9 +147,7 @@ export function hasIntegrity(data: BackupData): boolean {
     groups.size !== data.trash_groups.length ||
     entries.size !== data.entries.length ||
     platforms.size !== data.platform_labels.length ||
-    labels.size !== data.content_labels.length ||
-    !unique(data.platform_labels, (label) => labelKey(label.name)) ||
-    !unique(data.content_labels, (label) => labelKey(label.name))
+    labels.size !== data.content_labels.length
   )
     return false;
 
@@ -222,26 +215,7 @@ export function hasIntegrity(data: BackupData): boolean {
   );
 }
 
-function mergeLabels(
-  local: BackupData['platform_labels'],
-  incoming: BackupData['platform_labels'],
-) {
-  const ids = new Set(local.map((label) => label.id));
-  const byName = new Map(local.map((label) => [labelKey(label.name), label.id]));
-  const aliases = new Map<string, string>();
-  const labels = [...local];
-  for (const label of incoming) {
-    if (ids.has(label.id)) continue;
-    const existingId = byName.get(labelKey(label.name));
-    if (existingId !== undefined) aliases.set(label.id, existingId);
-    else labels.push(label);
-  }
-  return { labels, aliases };
-}
-
 export function mergeBackup(local: BackupData, incoming: BackupData): BackupData {
-  const platforms = mergeLabels(local.platform_labels, incoming.platform_labels);
-  const content = mergeLabels(local.content_labels, incoming.content_labels);
   const newEntries = additions(local.entries, incoming.entries);
   const newEntryIds = new Set(newEntries.map((entry) => entry.id));
   const newFolders = additions(local.folders, incoming.folders);
@@ -249,8 +223,14 @@ export function mergeBackup(local: BackupData, incoming: BackupData): BackupData
 
   return {
     settings: local.settings,
-    platform_labels: platforms.labels,
-    content_labels: content.labels,
+    platform_labels: [
+      ...local.platform_labels,
+      ...additions(local.platform_labels, incoming.platform_labels),
+    ],
+    content_labels: [
+      ...local.content_labels,
+      ...additions(local.content_labels, incoming.content_labels),
+    ],
     folders: [...local.folders, ...newFolders],
     trash_groups: [
       ...local.trash_groups,
@@ -258,28 +238,14 @@ export function mergeBackup(local: BackupData, incoming: BackupData): BackupData
         newGroupIds.has(group.id),
       ),
     ],
-    entries: [
-      ...local.entries,
-      ...newEntries.map((entry) => ({
-        ...entry,
-        platform_label_id:
-          entry.platform_label_id === null
-            ? null
-            : (platforms.aliases.get(entry.platform_label_id) ?? entry.platform_label_id),
-      })),
-    ],
+    entries: [...local.entries, ...newEntries],
     entry_folders: [
       ...local.entry_folders,
       ...incoming.entry_folders.filter((membership) => newEntryIds.has(membership.entry_id)),
     ],
     entry_content_labels: [
       ...local.entry_content_labels,
-      ...incoming.entry_content_labels
-        .filter((membership) => newEntryIds.has(membership.entry_id))
-        .map((membership) => ({
-          ...membership,
-          label_id: content.aliases.get(membership.label_id) ?? membership.label_id,
-        })),
+      ...incoming.entry_content_labels.filter((membership) => newEntryIds.has(membership.entry_id)),
     ],
   };
 }

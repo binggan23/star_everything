@@ -17,6 +17,7 @@ import type { MetadataRecognizer } from '../domain/metadata';
 import type { Settings } from '../domain/settings';
 import { formatContentLabels } from '../domain/labels';
 import { BackupPanel } from './BackupPanel';
+import { ContentLabelManager } from './ContentLabelManager';
 import { EntryForm } from './EntryForm';
 import type { EntryDraft, SubmitResult } from './EntryForm';
 import { FolderPanel } from './FolderPanel';
@@ -67,6 +68,7 @@ export function App({
 }) {
   const searchId = useId();
   const labelManagerId = useId();
+  const contentLabelManagerId = useId();
   const [status, setStatus] = useState<Status>('loading');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -76,11 +78,12 @@ export function App({
   const [settings, setSettings] = useState<Settings | null>(null);
   const [viewingSettings, setViewingSettings] = useState(false);
   const [viewingTrash, setViewingTrash] = useState(false);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(HOME_FOLDER_ID);
   const [searchQuery, setSearchQuery] = useState('');
   const [platformFilter, setPlatformFilter] = useState<string[]>([]);
   const [contentFilter, setContentFilter] = useState<string[]>([]);
   const [managingLabels, setManagingLabels] = useState(false);
+  const [managingContentLabels, setManagingContentLabels] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [replaceCount, setReplaceCount] = useState(0);
@@ -141,6 +144,20 @@ export function App({
     setSelectedFolderId(null);
     setEditingId(null);
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = window.setInterval(
+      () => {
+        if (!cancelled) setReloadKey((key) => key + 1);
+      },
+      60 * 60 * 1000,
+    );
+    return () => {
+      cancelled = true;
+      window.clearInterval(refresh);
+    };
+  }, []);
 
   const theme = settings?.theme ?? 'system';
   useEffect(() => {
@@ -225,13 +242,31 @@ export function App({
     [repository],
   );
 
+  const renameContentLabel = useCallback(
+    async (id: string, name: string) => {
+      const result = await repository.renameContentLabel(id, name);
+      if (result.ok) setReloadKey((key) => key + 1);
+      return result;
+    },
+    [repository],
+  );
+
+  const deleteContentLabel = useCallback(
+    async (id: string) => {
+      const result = await repository.deleteContentLabel(id);
+      if (result.ok) setReloadKey((key) => key + 1);
+      return result;
+    },
+    [repository],
+  );
+
   const deleteFolder = useCallback(
     async (mode: FolderDeleteMode): Promise<string | null> => {
       if (selectedFolderId === null) return null;
 
       await repository.deleteFolder(selectedFolderId, mode);
       setViewingTrash(false);
-      setSelectedFolderId(null);
+      setSelectedFolderId(HOME_FOLDER_ID);
       setEditingId(null);
       setReloadKey((key) => key + 1);
       return null;
@@ -346,6 +381,26 @@ export function App({
       />
     </div>
   );
+  const contentLabelManagerToggle = (
+    <button
+      type="button"
+      className="secondary label-manager-toggle"
+      aria-expanded={managingContentLabels}
+      aria-controls={contentLabelManagerId}
+      onClick={() => setManagingContentLabels((current) => !current)}
+    >
+      管理内容标签
+    </button>
+  );
+  const contentLabelManager = managingContentLabels && (
+    <div id={contentLabelManagerId}>
+      <ContentLabelManager
+        labels={contentLabels}
+        onRename={renameContentLabel}
+        onDelete={deleteContentLabel}
+      />
+    </div>
+  );
 
   return (
     <div className="app">
@@ -430,11 +485,13 @@ export function App({
               <h2>管理</h2>
               <div className="settings-options">
                 {labelManagerToggle}
+                {contentLabelManagerToggle}
                 <button type="button" className="secondary" onClick={openTrash}>
                   管理回收站
                 </button>
               </div>
               {labelManager}
+              {contentLabelManager}
             </section>
           </>
         ) : viewingTrash ? (
@@ -549,7 +606,9 @@ export function App({
             </form>
 
             {labelManagerToggle}
+            {contentLabelManagerToggle}
             {labelManager}
+            {contentLabelManager}
 
             <EntryForm
               key={`${editingEntry?.id ?? 'new-entry'}-${selectedFolderId ?? 'all'}`}

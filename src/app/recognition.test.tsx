@@ -35,7 +35,7 @@ describe('metadata recognition', () => {
   it('fills the title, author, platform, and URL from a Bilibili video page', async () => {
     const user = userEvent.setup();
     const { requests } = openApp({ [BILIBILI_URL]: BILIBILI_VIDEO_PAGE });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), BILIBILI_URL);
     await user.click(screen.getByRole('button', { name: '识别' }));
@@ -50,7 +50,7 @@ describe('metadata recognition', () => {
   it('treats a Bilibili verification page as a failed extraction', async () => {
     const user = userEvent.setup();
     openApp({ [BILIBILI_URL]: BILIBILI_VERIFICATION_PAGE });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), BILIBILI_URL);
     await user.click(screen.getByRole('button', { name: '识别' }));
@@ -64,7 +64,7 @@ describe('metadata recognition', () => {
   it('treats a Bilibili error page as a failed extraction', async () => {
     const user = userEvent.setup();
     openApp({ [BILIBILI_URL]: BILIBILI_ERROR_PAGE });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), BILIBILI_URL);
     await user.click(screen.getByRole('button', { name: '识别' }));
@@ -81,7 +81,7 @@ describe('metadata recognition', () => {
     const { requests } = openApp({
       'https://v.douyin.com/iRNBho6u/': DOUYIN_SHORT_LINK_PAGE,
     });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('分享链接或文案'), shareText);
     await user.click(screen.getByRole('button', { name: '识别' }));
@@ -101,7 +101,7 @@ describe('metadata recognition', () => {
       'https://www.xiaohongshu.com/discovery/item/66abc123?xsec_token=AB3xY-token&xsec_source=pc_share';
     const shareText = `42 【超好吃的减脂餐 - 小美 | 小红书】 😆 好吃到哭 😆 ${shareUrl} 复制本条信息，打开【小红书】App查看精彩内容！`;
     const { requests } = openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('分享链接或文案'), shareText);
     await user.click(screen.getByRole('button', { name: '识别' }));
@@ -116,7 +116,7 @@ describe('metadata recognition', () => {
   it('leaves manual entry available after a failed extraction and still saves', async () => {
     const user = userEvent.setup();
     openApp({ [BILIBILI_URL]: BILIBILI_VERIFICATION_PAGE });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), BILIBILI_URL);
     await user.click(screen.getByRole('button', { name: '识别' }));
@@ -133,7 +133,7 @@ describe('metadata recognition', () => {
   it('lets the user edit recognized values before saving', async () => {
     const user = userEvent.setup();
     openApp({ [BILIBILI_URL]: BILIBILI_VIDEO_PAGE });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), BILIBILI_URL);
     await user.click(screen.getByRole('button', { name: '识别' }));
@@ -152,7 +152,7 @@ describe('metadata recognition', () => {
   it('keeps manual values when recognition finds different metadata', async () => {
     const user = userEvent.setup();
     openApp({ [BILIBILI_URL]: BILIBILI_VIDEO_PAGE });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('标题'), '我先写的标题');
     await user.type(screen.getByLabelText('作者'), '我先写的作者');
@@ -168,7 +168,7 @@ describe('metadata recognition', () => {
     const user = userEvent.setup();
     const url = 'https://www.douyin.com/video/7300000000000000000';
     openApp({ [url]: DOUYIN_SHORT_LINK_PAGE });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), url);
     await user.click(screen.getByRole('button', { name: '识别' }));
@@ -197,7 +197,7 @@ describe('metadata recognition', () => {
     const warnSpy = vi.spyOn(console, 'warn');
     const logSpy = vi.spyOn(console, 'log');
     render(<App repository={opened.repository} recognizer={recognizer} />);
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText('网址'), tokenUrl);

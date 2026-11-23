@@ -1,6 +1,6 @@
 import { collectFolderSubtree, HOME_FOLDER_ID, normalizeOptional } from '../domain/collection';
 import { createId } from '../domain/id';
-import { parseContentLabels } from '../domain/labels';
+import { formatContentLabels, parseContentLabels } from '../domain/labels';
 import type { Settings } from '../domain/settings';
 import { isTrashExpired, retentionDaysLeft } from '../domain/trash';
 import type { BackupData, ImportMode } from '../domain/backup';
@@ -64,6 +64,11 @@ export type FolderResult = { ok: true; folder: Folder } | { ok: false; error: Fo
 
 export type LabelResult = { ok: true; label: PlatformLabel } | { ok: false; error: LabelErrorCode };
 
+export type ContentLabelErrorCode = LabelErrorCode | 'LABEL_IN_USE';
+
+export type ContentLabelResult =
+  { ok: true; label: ContentLabel } | { ok: false; error: ContentLabelErrorCode };
+
 export type TrashKind = 'entry' | 'collection';
 
 export type TrashItem = {
@@ -103,6 +108,8 @@ export interface CollectionRepository {
   deleteFolder(id: string, mode: FolderDeleteMode): Promise<void>;
   listPlatformLabels(): Promise<PlatformLabel[]>;
   listContentLabels(): Promise<ContentLabel[]>;
+  renameContentLabel(id: string, name: string): Promise<ContentLabelResult>;
+  deleteContentLabel(id: string): Promise<ContentLabelResult>;
   createPlatformLabel(name: string): Promise<LabelResult>;
   renamePlatformLabel(id: string, name: string): Promise<LabelResult>;
   deletePlatformLabel(id: string): Promise<void>;
@@ -247,11 +254,17 @@ export function createCollectionRepository(
     const names = parseContentLabels(raw);
     await driver.execute('DELETE FROM entry_content_labels WHERE entry_id = ?', [entryId]);
 
+    const existingRows = await driver.select<{ id: string; name: string }>(
+      'SELECT id, name FROM content_labels',
+    );
     for (const name of names) {
-      const [existing] = await driver.select<{ id: string }>(
-        'SELECT id FROM content_labels WHERE name = ? COLLATE NOCASE',
-        [name],
-      );
+      const existing =
+        existingRows.find((row) => row.name === name) ??
+        existingRows.find(
+          (row) =>
+            row.name.replace(/[A-Z]/g, (char) => char.toLowerCase()) ===
+            name.replace(/[A-Z]/g, (char) => char.toLowerCase()),
+        );
       let labelId = existing?.id;
       if (labelId === undefined) {
         labelId = createId();
@@ -266,11 +279,6 @@ export function createCollectionRepository(
         [entryId, labelId],
       );
     }
-
-    await driver.execute(
-      `DELETE FROM content_labels
-       WHERE id NOT IN (SELECT label_id FROM entry_content_labels)`,
-    );
   }
 
   async function membershipsFor(entryIds: readonly string[]): Promise<Map<string, string[]>> {
@@ -339,6 +347,12 @@ export function createCollectionRepository(
     }
 
     await driver.execute('DELETE FROM trash_groups WHERE id = ?', [id]);
+    await driver.execute(
+      'DELETE FROM content_labels WHERE id NOT IN (SELECT label_id FROM entry_content_labels)',
+    );
+  }
+
+  async function removeUnusedContentLabels(): Promise<void> {
     await driver.execute(
       'DELETE FROM content_labels WHERE id NOT IN (SELECT label_id FROM entry_content_labels)',
     );
@@ -494,6 +508,45 @@ export function createCollectionRepository(
       return rows.map((row) => ({ id: row.id, name: row.name }));
     },
 
+    async renameContentLabel(id, name) {
+      const names = parseContentLabels(formatContentLabels([name]));
+      if (names.length !== 1) return { ok: false, error: 'LABEL_NAME_REQUIRED' };
+      const trimmed = names[0];
+      if (trimmed === undefined) return { ok: false, error: 'LABEL_NAME_REQUIRED' };
+
+      const [current] = await driver.select<{ id: string }>(
+        'SELECT id FROM content_labels WHERE id = ?',
+        [id],
+      );
+      if (!current) return { ok: false, error: 'LABEL_NOT_FOUND' };
+
+      const [existing] = await driver.select<{ id: string }>(
+        'SELECT id FROM content_labels WHERE name = ? COLLATE NOCASE',
+        [trimmed],
+      );
+      if (existing && existing.id !== id) return { ok: false, error: 'LABEL_NAME_TAKEN' };
+
+      await driver.execute('UPDATE content_labels SET name = ? WHERE id = ?', [trimmed, id]);
+      return { ok: true, label: { id, name: trimmed } };
+    },
+
+    async deleteContentLabel(id) {
+      const [current] = await driver.select<{ id: string }>(
+        'SELECT id FROM content_labels WHERE id = ?',
+        [id],
+      );
+      if (!current) return { ok: false, error: 'LABEL_NOT_FOUND' };
+
+      const [used] = await driver.select<{ entry_id: string }>(
+        'SELECT entry_id FROM entry_content_labels WHERE label_id = ? LIMIT 1',
+        [id],
+      );
+      if (used) return { ok: false, error: 'LABEL_IN_USE' };
+
+      await driver.execute('DELETE FROM content_labels WHERE id = ?', [id]);
+      return { ok: true, label: { id, name: '' } };
+    },
+
     async createPlatformLabel(name) {
       const trimmed = name.trim();
       if (trimmed === '') return { ok: false, error: 'LABEL_NAME_REQUIRED' };
@@ -577,6 +630,7 @@ export function createCollectionRepository(
       );
       await replaceMemberships(id, draft.folderIds ?? [HOME_FOLDER_ID]);
       await syncContentLabels(id, draft.contentLabels);
+      await removeUnusedContentLabels();
 
       const [entry] = await loadEntries([id]);
       if (entry === undefined) return { ok: false, error: 'ENTRY_NOT_FOUND' };
@@ -603,6 +657,7 @@ export function createCollectionRepository(
 
       if (draft.folderIds !== undefined) await replaceMemberships(id, draft.folderIds);
       await syncContentLabels(id, draft.contentLabels);
+      await removeUnusedContentLabels();
 
       const [entry] = await loadEntries([id]);
       if (entry === undefined) return { ok: false, error: 'ENTRY_NOT_FOUND' };
@@ -717,11 +772,13 @@ export function createCollectionRepository(
 
     async purgeTrash(id) {
       await purgeGroup(id);
+      await removeUnusedContentLabels();
     },
 
     async clearTrash() {
       const rows = await driver.select<{ id: string }>('SELECT id FROM trash_groups');
       for (const row of rows) await purgeGroup(row.id);
+      await removeUnusedContentLabels();
     },
   };
 }
