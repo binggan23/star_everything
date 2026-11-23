@@ -1,7 +1,10 @@
 import { collectFolderSubtree, HOME_FOLDER_ID, normalizeOptional } from '../domain/collection';
 import { createId } from '../domain/id';
 import { parseContentLabels } from '../domain/labels';
+import type { Settings } from '../domain/settings';
 import { isTrashExpired, retentionDaysLeft } from '../domain/trash';
+import type { BackupData, ImportMode } from '../domain/backup';
+import { exportBackup, importBackup } from './backupStore';
 import { migrations } from './migrations';
 import type { SqlDriver } from './sqlDriver';
 
@@ -85,6 +88,10 @@ export type FolderDeleteMode = 'move-entries-to-home' | 'trash-tree';
 export interface CollectionRepository {
   /** Applies pending schema migrations. Safe to call more than once. */
   init(): Promise<void>;
+  exportBackup(): Promise<string>;
+  importBackup(backup: BackupData, mode: ImportMode): Promise<void>;
+  getSettings(): Promise<Settings>;
+  saveSettings(settings: Settings): Promise<void>;
   listFolders(): Promise<Folder[]>;
   createFolder(name: string, parentId: string): Promise<FolderResult>;
   renameFolder(id: string, name: string): Promise<FolderResult>;
@@ -384,6 +391,28 @@ export function createCollectionRepository(
     async init() {
       await migrate();
       await purgeExpired();
+    },
+
+    async exportBackup() {
+      await purgeExpired();
+      return exportBackup(driver);
+    },
+
+    importBackup: (backup, mode) => importBackup(driver, backup, mode),
+
+    async getSettings() {
+      const [row] = await driver.select<{ theme: Settings['theme']; recognize_metadata: number }>(
+        'SELECT theme, recognize_metadata FROM settings WHERE id = 1',
+      );
+      if (row === undefined) throw new Error('Missing settings');
+      return { theme: row.theme, recognizeMetadata: row.recognize_metadata === 1 };
+    },
+
+    async saveSettings(settings) {
+      await driver.execute('UPDATE settings SET theme = ?, recognize_metadata = ? WHERE id = 1', [
+        settings.theme,
+        Number(settings.recognizeMetadata),
+      ]);
     },
 
     async listFolders() {

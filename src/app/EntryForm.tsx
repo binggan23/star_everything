@@ -21,7 +21,7 @@ export type EntryFormProps = {
   initial: EntryDraft;
   folders: readonly Folder[];
   platformLabels: readonly PlatformLabel[];
-  recognizer: MetadataRecognizer;
+  recognizer: MetadataRecognizer | null;
   submitLabel: string;
   onSubmit: (draft: EntryDraft) => Promise<SubmitResult>;
   onCancel?: () => void;
@@ -89,7 +89,7 @@ export function EntryForm({
   }
 
   async function handleRecognize() {
-    if (recognizing) return;
+    if (recognizer === null || recognizing) return;
 
     const input = shareText.trim() === '' ? draft.url : shareText;
     setRecognizing(true);
@@ -149,38 +149,40 @@ export function EntryForm({
 
   return (
     <form className="entry-form" onSubmit={handleSubmit} noValidate>
-      <div className="field field-wide">
-        <label htmlFor={shareId}>分享链接或文案</label>
-        <textarea
-          id={shareId}
-          name="shareText"
-          rows={2}
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          value={shareText}
-          onChange={(event) => {
-            setShareText(event.target.value);
-            setRecognitionMessage(null);
-          }}
-        />
-        <div className="share-actions">
-          <button
-            type="button"
-            className="secondary"
-            disabled={recognizing}
-            aria-busy={recognizing}
-            onClick={handleRecognize}
-          >
-            识别
-          </button>
-          {recognitionStatus !== null && (
-            <p className="share-status" role="status">
-              {recognitionStatus}
-            </p>
-          )}
+      {recognizer !== null && (
+        <div className="field field-wide">
+          <label htmlFor={shareId}>分享链接或文案</label>
+          <textarea
+            id={shareId}
+            name="shareText"
+            rows={2}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={shareText}
+            onChange={(event) => {
+              setShareText(event.target.value);
+              setRecognitionMessage(null);
+            }}
+          />
+          <div className="share-actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={recognizing}
+              aria-busy={recognizing}
+              onClick={handleRecognize}
+            >
+              识别
+            </button>
+            {recognitionStatus !== null && (
+              <p className="share-status" role="status">
+                {recognitionStatus}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="field field-wide">
         <label htmlFor={titleId}>标题</label>
