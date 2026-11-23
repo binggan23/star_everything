@@ -12,14 +12,18 @@ import { App } from './App';
 const databases: ReturnType<typeof openTestRepository>[] = [];
 const views: ReturnType<typeof render>[] = [];
 
-function openApp(options: OpenTestRepositoryOptions = {}) {
-  const database = openTestRepository(options);
-  databases.push(database);
+function renderApp(database: ReturnType<typeof openTestRepository>) {
   const view = render(
     <App repository={database.repository} recognizer={createTestRecognizer().recognizer} />,
   );
   views.push(view);
   return { ...database, ...view };
+}
+
+function openApp(options: OpenTestRepositoryOptions = {}) {
+  const database = openTestRepository(options);
+  databases.push(database);
+  return renderApp(database);
 }
 
 const userSetup = () => userEvent.setup();
@@ -307,11 +311,21 @@ it('replaces the entire local state only after confirmation and restores a delet
 
 it('opens platform label management and trash cleanup from settings', async () => {
   const user = userSetup();
-  openApp();
+  const database = openTestRepository();
+  databases.push(database);
+  await database.repository.init();
+  const created = await database.repository.createEntry({
+    title: '',
+    url: '',
+    author: '待清理的作者',
+    platformLabelId: '',
+    contentLabels: '',
+    folderIds: ['home'],
+  });
+  if (!created.ok) throw new Error('Could not seed the trash entry');
+  await database.repository.deleteEntry(created.entry.id);
+  renderApp(database);
   await screen.findByRole('heading', { name: 'Home' });
-  await addAuthor(user, '待清理的作者');
-  await user.click(screen.getByRole('button', { name: '删除 待清理的作者' }));
-  await waitFor(() => expect(screen.queryByText('待清理的作者')).not.toBeInTheDocument());
   await openSettings(user);
   await user.click(screen.getByRole('button', { name: '管理平台标签' }));
   await user.type(screen.getByLabelText('新平台标签'), '新平台');
