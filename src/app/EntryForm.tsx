@@ -127,9 +127,9 @@ export function EntryForm({
   function describeProblem(problem: RecognitionProblem): string {
     switch (problem) {
       case 'NO_INPUT':
-        return '请粘贴链接或分享文案。';
+        return '请粘贴网址或分享文案。';
       case 'NO_URL':
-        return '未找到链接，请检查后重试。';
+        return '未找到网址，请检查后重试。';
       case 'UNSUPPORTED_PLATFORM':
         return '暂不支持自动识别，请手动填写标题和作者。';
       case 'PAGE_UNAVAILABLE':
@@ -151,7 +151,7 @@ export function EntryForm({
     <form className="entry-form" onSubmit={handleSubmit} noValidate>
       {recognizer !== null && (
         <div className="field field-wide">
-          <label htmlFor={shareId}>分享链接或文案</label>
+          <label htmlFor={shareId}>分享网址或文案</label>
           <textarea
             id={shareId}
             name="shareText"

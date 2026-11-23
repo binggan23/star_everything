@@ -83,7 +83,7 @@ describe('metadata recognition', () => {
     });
     await screen.findByRole('heading', { name: 'Home' });
 
-    await user.type(screen.getByLabelText('分享链接或文案'), shareText);
+    await user.type(screen.getByLabelText('分享网址或文案'), shareText);
     await user.click(screen.getByRole('button', { name: '识别' }));
 
     expect(await screen.findByDisplayValue('三分钟红烧肉教程')).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('metadata recognition', () => {
     const { requests } = openApp();
     await screen.findByRole('heading', { name: 'Home' });
 
-    await user.type(screen.getByLabelText('分享链接或文案'), shareText);
+    await user.type(screen.getByLabelText('分享网址或文案'), shareText);
     await user.click(screen.getByRole('button', { name: '识别' }));
 
     expect(await screen.findByDisplayValue('超好吃的减脂餐')).toBeInTheDocument();
