@@ -54,7 +54,7 @@ export const migrations: readonly Migration[] = [
         name TEXT NOT NULL,
         created_at TEXT NOT NULL
       )`,
-      `CREATE UNIQUE INDEX IF NOT EXISTS platform_labels_name_nocase
+      `CREATE INDEX IF NOT EXISTS platform_labels_name_nocase
         ON platform_labels (name COLLATE NOCASE)`,
       `INSERT OR IGNORE INTO platform_labels (id, name, created_at) VALUES
         ('platform-bilibili', 'Bilibili', '1970-01-01T00:00:00.000Z'),
@@ -70,7 +70,7 @@ export const migrations: readonly Migration[] = [
         name TEXT NOT NULL,
         created_at TEXT NOT NULL
       )`,
-      `CREATE UNIQUE INDEX IF NOT EXISTS content_labels_name_nocase
+      `CREATE INDEX IF NOT EXISTS content_labels_name_nocase
         ON content_labels (name COLLATE NOCASE)`,
       `CREATE TABLE IF NOT EXISTS entry_content_labels (
         entry_id TEXT NOT NULL REFERENCES entries (id) ON DELETE CASCADE,
@@ -123,6 +123,18 @@ export const migrations: readonly Migration[] = [
       )`,
       `INSERT OR IGNORE INTO settings (id, theme, recognize_metadata) VALUES (1, 'system', 1)`,
       ...backupStatements,
+    ],
+  },
+  {
+    version: 6,
+    statements: [
+      // Names are validated on local writes, but distinct imported IDs may share a name.
+      'DROP INDEX IF EXISTS platform_labels_name_nocase',
+      `CREATE INDEX IF NOT EXISTS platform_labels_name_nocase
+        ON platform_labels (name COLLATE NOCASE)`,
+      'DROP INDEX IF EXISTS content_labels_name_nocase',
+      `CREATE INDEX IF NOT EXISTS content_labels_name_nocase
+        ON content_labels (name COLLATE NOCASE)`,
     ],
   },
 ];

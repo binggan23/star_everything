@@ -176,13 +176,13 @@ it('merges a repeated backup by stable ID and keeps independently saved entries 
   const captured = captureDownload();
   const url = 'https://example.com/video';
   const source = openApp();
-  await screen.findByRole('heading', { name: '全部条目' });
+  await screen.findByRole('heading', { name: 'Home' });
   await addAuthor(user, '来自备份', url, '#Note');
   const file = await download(user, captured);
   source.unmount();
 
   openApp();
-  await screen.findByRole('heading', { name: '全部条目' });
+  await screen.findByRole('heading', { name: 'Home' });
   await addAuthor(user, '本地保存', url, '#note');
   for (const edited of [false, true]) {
     await openSettings(user);
@@ -194,7 +194,17 @@ it('merges a repeated backup by stable ID and keeps independently saved entries 
     expect(await screen.findByText(author)).toBeInTheDocument();
     expect(screen.getAllByText(url)).toHaveLength(2);
     expect(screen.getByText('本地保存')).toBeInTheDocument();
-    expect(screen.getAllByText('#note')).toHaveLength(3); // filter choice and two entries
+    const entryList = screen.getByRole('list', { name: '收藏条目' });
+    expect(within(entryList).getByText('#note')).toBeInTheDocument();
+    expect(within(entryList).getByText('#Note')).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox', { name: '#note' })).toHaveLength(1);
+    expect(screen.getAllByRole('checkbox', { name: '#Note' })).toHaveLength(1);
+    const contentToggle = screen.getByRole('button', { name: '管理内容标签' });
+    if (contentToggle.getAttribute('aria-expanded') !== 'true') await user.click(contentToggle);
+    const contentManager = screen.getByRole('region', { name: '内容标签管理' });
+    expect(within(contentManager).getAllByText('#Note')).toHaveLength(1);
+    expect(within(contentManager).getAllByText('#note')).toHaveLength(1);
+    // #Note and #note are separate records, one for each stable ID.
     if (!edited) {
       const imported = screen.getByText('来自备份').closest('li')!;
       await user.click(within(imported).getByRole('button', { name: '编辑' }));
@@ -210,7 +220,7 @@ it('rejects backups with broken references even when their checksum matches', as
   const user = userSetup();
   const captured = captureDownload();
   openApp();
-  await screen.findByRole('heading', { name: '全部条目' });
+  await screen.findByRole('heading', { name: 'Home' });
   await addAuthor(user, '仍然保留');
   const original = await download(user, captured);
   const backup = JSON.parse(await original.text());
@@ -295,7 +305,7 @@ it('replaces the entire local state only after confirmation and restores a delet
 it('opens platform label management and trash cleanup from settings', async () => {
   const user = userSetup();
   openApp();
-  await screen.findByRole('heading', { name: '全部条目' });
+  await screen.findByRole('heading', { name: 'Home' });
   await addAuthor(user, '待清理的作者');
   await user.click(screen.getByRole('button', { name: '删除 待清理的作者' }));
   await waitFor(() => expect(screen.queryByText('待清理的作者')).not.toBeInTheDocument());
@@ -317,7 +327,7 @@ it('rejects malformed JSON, future versions, and checksum failures without offer
   const user = userSetup();
   const captured = captureDownload();
   openApp();
-  await screen.findByRole('heading', { name: '全部条目' });
+  await screen.findByRole('heading', { name: 'Home' });
   await addAuthor(user, '当前作者');
   const original = await download(user, captured);
   const backup = JSON.parse(await original.text());

@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestRecognizer } from '../test/support/publicPageFetcher';
 import { openTestRepository } from '../test/support/testRepository';
@@ -47,18 +47,28 @@ async function addEntryTo(
 }
 
 describe('collection', () => {
-  it('starts with the Home root and an empty all-entries view', async () => {
+  it('starts in Home and keeps a separate all-entries entry point', async () => {
+    const user = userEvent.setup();
     openApp();
 
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '全部条目' })).toBeInTheDocument();
+    expect(screen.getByText('没有符合条件的条目。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+
     expect(await screen.findByRole('heading', { name: '全部条目' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
-    expect(screen.getByText('还没有收藏条目。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '全部条目' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   it('saves an entry that has only a URL', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), 'https://www.bilibili.com/video/BV1xx411c7mD');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -72,7 +82,7 @@ describe('collection', () => {
   it('saves an entry that has only an author', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '老番茄');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -84,7 +94,7 @@ describe('collection', () => {
   it('saves an entry that has both a URL and an author', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), 'https://space.bilibili.com/546195');
     await user.type(screen.getByLabelText('作者'), '老番茄');
@@ -97,7 +107,7 @@ describe('collection', () => {
   it('rejects an entry with neither a URL nor an author and explains how to fix it', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '   ');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -108,13 +118,13 @@ describe('collection', () => {
     expect(screen.getByLabelText('网址')).toHaveFocus();
     expect(screen.getByLabelText('作者')).toHaveValue('   ');
     expect(screen.queryByRole('list', { name: '收藏条目' })).not.toBeInTheDocument();
-    expect(screen.getByText('还没有收藏条目。')).toBeInTheDocument();
+    expect(screen.getByText('没有符合条件的条目。')).toBeInTheDocument();
   });
 
   it('allows several entries with the same URL', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     const url = 'https://www.douyin.com/video/7300000000000000000';
 
     for (const expectedCount of [1, 2]) {
@@ -127,7 +137,7 @@ describe('collection', () => {
   it('files new entries under the Home root', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '影视飓风');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -143,7 +153,7 @@ describe('collection', () => {
   it('keeps entries after the application restarts', async () => {
     const user = userEvent.setup();
     const first = openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('网址'), 'https://www.xiaohongshu.com/explore/123');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -162,7 +172,7 @@ describe('collection', () => {
   it('edits an existing entry', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '老师好我叫何同学');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -181,7 +191,7 @@ describe('collection', () => {
   it('rejects an edit that removes both the URL and the author and keeps the saved entry', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '老番茄');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -202,7 +212,7 @@ describe('nested collections', () => {
   it('creates a collection under Home and browses it', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.click(screen.getByRole('button', { name: 'Home' }));
     await screen.findByRole('heading', { name: 'Home' });
@@ -221,7 +231,7 @@ describe('nested collections', () => {
   it('nests a collection under the selected collection', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.click(screen.getByRole('button', { name: 'Home' }));
     await user.click(await screen.findByRole('button', { name: '新建子收藏夹' }));
@@ -240,7 +250,7 @@ describe('nested collections', () => {
   it('renames a collection and updates its path', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await user.click(await screen.findByRole('button', { name: '科技' }));
 
@@ -262,7 +272,7 @@ describe('nested collections', () => {
   it('moves a collection under another collection and updates its path', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await createCollection(user, 'Home', '生活');
     await user.click(await screen.findByRole('button', { name: '生活' }));
@@ -280,7 +290,7 @@ describe('nested collections', () => {
   it('refuses to move a collection into its own descendant', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await user.click(await screen.findByRole('button', { name: '科技' }));
     await createCollection(user, '科技', '前端');
@@ -301,7 +311,7 @@ describe('nested collections', () => {
   it('refuses to move a collection into itself', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await user.click(await screen.findByRole('button', { name: '科技' }));
 
@@ -319,7 +329,7 @@ describe('nested collections', () => {
   it('keeps an entry in multiple collections across restarts', async () => {
     const user = userEvent.setup();
     const first = openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await createCollection(user, 'Home', '生活');
 
@@ -340,7 +350,7 @@ describe('nested collections', () => {
     opened = undefined;
 
     openApp({ databasePath: first.databasePath, directory: first.directory });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await user.click(await screen.findByRole('button', { name: '生活' }));
     expect(await screen.findByText('老番茄')).toBeInTheDocument();
   });
@@ -348,7 +358,7 @@ describe('nested collections', () => {
   it('filters a collection including its descendants', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await user.click(await screen.findByRole('button', { name: '科技' }));
     await createCollection(user, '科技', '前端');
@@ -374,7 +384,7 @@ describe('nested collections', () => {
   it('searches collection paths and other text fields', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', 'Rust 笔记');
 
     await user.click(screen.getByRole('button', { name: '全部条目' }));
@@ -400,7 +410,7 @@ describe('nested collections', () => {
   it('combines search with a collection filter using AND', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await createCollection(user, 'Home', '生活');
 
@@ -429,7 +439,7 @@ describe('nested collections', () => {
   it("changes an entry's collections by editing its memberships", async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await createCollection(user, 'Home', '生活');
 
@@ -479,7 +489,7 @@ describe('nested collections', () => {
 describe('labels and discovery', () => {
   it('offers the seeded platform labels as filters', async () => {
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     expect(await screen.findByRole('checkbox', { name: 'Bilibili' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: '抖音' })).toBeInTheDocument();
@@ -489,7 +499,7 @@ describe('labels and discovery', () => {
   it('adds, renames, and removes platform labels', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.click(screen.getByRole('button', { name: '管理平台标签' }));
     await user.type(screen.getByLabelText('新平台标签'), 'YouTube');
@@ -517,7 +527,7 @@ describe('labels and discovery', () => {
   it('saves a titled entry with a platform label and content labels', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('标题'), 'React 教程');
     await user.type(screen.getByLabelText('网址'), 'https://www.bilibili.com/video/BV1react');
@@ -541,7 +551,7 @@ describe('labels and discovery', () => {
   it('offers content labels used by saved entries as reusable filters', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     for (const [title, author, labels] of [
       ['第一篇', '作者一', '#音乐 #生活'],
@@ -562,7 +572,7 @@ describe('labels and discovery', () => {
   it('keeps content labels available until the last use is removed', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     for (const [title, author, labels] of [
       ['第一篇', '作者一', '#音乐 #生活'],
@@ -602,7 +612,7 @@ describe('labels and discovery', () => {
   it('searches titles, URLs, authors, platforms, and content labels case-insensitively', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('标题'), 'React 深入');
     await user.type(screen.getByLabelText('网址'), 'https://Example.com/Course');
@@ -637,7 +647,7 @@ describe('labels and discovery', () => {
   it('shows an empty-result state and clears search and filters without changing entries', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('标题'), 'React 入门');
     await user.type(screen.getByLabelText('作者'), 'Alice');
@@ -684,7 +694,7 @@ describe('labels and discovery', () => {
   it('combines selected values with OR inside a dimension and AND across dimensions', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     const entries = [
       { title: 'React 前端', author: 'Alice', platform: 'Bilibili', labels: '#前端' },
@@ -729,7 +739,7 @@ describe('labels and discovery', () => {
   it('updates entries when a platform label is renamed and keeps them when it is removed', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('标题'), '一期作品');
     await user.type(screen.getByLabelText('作者'), 'Alice');
@@ -760,7 +770,7 @@ describe('labels and discovery', () => {
   it('keeps custom platform labels and content labels after a restart', async () => {
     const user = userEvent.setup();
     const first = openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.click(screen.getByRole('button', { name: '管理平台标签' }));
     await user.type(screen.getByLabelText('新平台标签'), 'YouTube');
@@ -794,7 +804,7 @@ describe('labels and discovery', () => {
   it('drops an active filter when its platform label is removed', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('标题'), '留在这里');
     await user.type(screen.getByLabelText('作者'), 'Alice');
@@ -819,7 +829,7 @@ describe('labels and discovery', () => {
   it('rejects empty and duplicate platform label names', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.click(screen.getByRole('button', { name: '管理平台标签' }));
     await user.click(screen.getByRole('button', { name: '添加平台标签' }));
@@ -834,7 +844,7 @@ describe('labels and discovery', () => {
   it('keeps editing an entry after its platform label is removed', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('标题'), '保留作品');
     await user.type(screen.getByLabelText('作者'), 'Alice');
@@ -863,11 +873,79 @@ describe('labels and discovery', () => {
   });
 });
 
+describe('content label management', () => {
+  it('renames a content label everywhere it is used', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: 'Home' });
+    await user.type(screen.getByLabelText('作者'), '标签作者');
+    await user.type(screen.getByLabelText('内容标签'), '#前端');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('标签作者');
+
+    await user.click(screen.getByRole('button', { name: '管理内容标签' }));
+    await user.click(screen.getByRole('button', { name: '重命名 #前端' }));
+    const name = screen.getByLabelText('内容标签名称');
+    await user.clear(name);
+    await user.type(name, 'Web');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(await screen.findByRole('checkbox', { name: '#Web' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: '#前端' })).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: '收藏条目' })).toHaveTextContent('#Web');
+    expect(screen.getByRole('list', { name: '收藏条目' })).not.toHaveTextContent('#前端');
+  });
+
+  it('deletes an unused content label but protects one still attached to an entry', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: 'Home' });
+    await user.type(screen.getByLabelText('作者'), '标签作者');
+    await user.type(screen.getByLabelText('内容标签'), '#保留');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await screen.findByText('标签作者');
+    await user.click(screen.getByRole('button', { name: '管理内容标签' }));
+    await screen.findByRole('button', { name: '删除 #保留' });
+    await user.click(screen.getByRole('button', { name: '删除 #保留' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '内容标签正在使用，请先从条目中移除。',
+    );
+    expect(screen.getByRole('checkbox', { name: '#保留' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '编辑' }));
+    await user.clear(screen.getByLabelText('内容标签'));
+    await user.click(screen.getByRole('button', { name: '保存修改' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '删除 #保留' })).not.toBeInTheDocument(),
+    );
+
+    await user.clear(screen.getByLabelText('作者'));
+    await user.type(screen.getByLabelText('作者'), '临时标签作者');
+    await user.clear(screen.getByLabelText('内容标签'));
+    await user.type(screen.getByLabelText('内容标签'), '#临时');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    const row = (await screen.findByText('临时标签作者')).closest('li');
+    if (!row) throw new Error('missing second entry');
+    await user.click(within(row).getByRole('button', { name: '删除 临时标签作者' }));
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    await user.click(screen.getByRole('button', { name: '立即清除 临时标签作者' }));
+    await user.click(screen.getByRole('button', { name: '永久清除' }));
+    await screen.findByText('回收站是空的。');
+    await user.click(screen.getByRole('button', { name: 'Home' }));
+    const managerToggle = await screen.findByRole('button', { name: '管理内容标签' });
+    if (managerToggle.getAttribute('aria-expanded') !== 'true') await user.click(managerToggle);
+
+    const manager = await screen.findByRole('region', { name: '内容标签管理' });
+    await waitFor(() => expect(within(manager).queryByText('#临时')).not.toBeInTheDocument());
+    expect(within(manager).getByText('还没有内容标签。')).toBeInTheDocument();
+  });
+});
+
 describe('trash and recovery', () => {
   it('moves a deleted entry to the trash and restores it', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '老番茄');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -893,7 +971,7 @@ describe('trash and recovery', () => {
   it('shows remaining retention and clears a trashed entry immediately', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '影视飓风');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -919,7 +997,7 @@ describe('collection deletion', () => {
   it('explains the impact, offers both choices, and can be cancelled', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await createCollection(user, '科技', '前端');
     await user.click(screen.getByRole('button', { name: '全部条目' }));
@@ -948,7 +1026,7 @@ describe('collection deletion', () => {
   it('moves entries to Home and preserves memberships outside the deleted tree', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await createCollection(user, 'Home', '生活');
     await user.click(screen.getByRole('button', { name: '全部条目' }));
@@ -964,7 +1042,7 @@ describe('collection deletion', () => {
     await user.click(within(dialog).getByRole('radio', { name: '条目移到 Home，删除收藏夹' }));
     await user.click(within(dialog).getByRole('button', { name: '删除' }));
 
-    expect(await screen.findByRole('heading', { name: '全部条目' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '科技' })).not.toBeInTheDocument();
     expect(await screen.findByText('老番茄')).toBeInTheDocument();
     const restoredRow = screen.getByText('老番茄').closest('li');
@@ -982,7 +1060,7 @@ describe('collection deletion', () => {
   it('deletes an empty collection after confirmation', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '临时');
     await user.click(screen.getByRole('button', { name: '临时' }));
 
@@ -991,7 +1069,7 @@ describe('collection deletion', () => {
     expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: '删除' }));
 
-    expect(await screen.findByRole('heading', { name: '全部条目' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '临时' })).not.toBeInTheDocument();
   });
 });
@@ -1000,7 +1078,7 @@ describe('collection trash group', () => {
   it('moves a collection tree and its entries to the trash and restores both', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '科技');
     await createCollection(user, '科技', '前端');
     await createCollection(user, 'Home', '生活');
@@ -1013,7 +1091,7 @@ describe('collection trash group', () => {
     await user.click(within(dialog).getByRole('radio', { name: '收藏夹和条目移到回收站' }));
     await user.click(within(dialog).getByRole('button', { name: '删除' }));
 
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     expect(screen.queryByRole('button', { name: '科技' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '前端' })).not.toBeInTheDocument();
     expect(screen.queryByText('组件库')).not.toBeInTheDocument();
@@ -1042,11 +1120,33 @@ describe('collection trash group', () => {
 });
 
 describe('trash retention', () => {
+  it('purges expired trash while the app remains open and cleans up its timer', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    let today = new Date('2025-01-01T00:00:00.000Z');
+    const app = openApp({ now: () => today });
+    await screen.findByRole('heading', { name: 'Home' });
+    await user.type(screen.getByLabelText('作者'), '按时清理');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    await user.click(await screen.findByRole('button', { name: '删除 按时清理' }));
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    await screen.findByText('按时清理');
+    expect(vi.getTimerCount()).toBe(2); // lifecycle refresh and download-link revocation
+
+    today = new Date('2025-02-01T00:00:00.000Z');
+    await act(() => vi.advanceTimersByTimeAsync(60 * 60 * 1000));
+
+    expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
+    app.unmount();
+    expect(vi.getTimerCount()).toBe(1); // the unrelated URL revocation timer may remain
+    vi.useRealTimers();
+  });
+
   it('counts down the remaining retention across restarts', async () => {
     const user = userEvent.setup();
     let today = new Date('2025-01-01T00:00:00.000Z');
     const first = openApp({ now: () => today });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '老番茄');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -1064,7 +1164,7 @@ describe('trash retention', () => {
 
     today = new Date('2025-01-11T00:00:00.000Z');
     openApp({ databasePath: first.databasePath, directory: first.directory, now: () => today });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await user.click(screen.getByRole('button', { name: '回收站' }));
     trash = await screen.findByRole('list', { name: '回收站项目' });
     expect(within(trash).getByText('剩余 20 天')).toBeInTheDocument();
@@ -1074,7 +1174,7 @@ describe('trash retention', () => {
     const user = userEvent.setup();
     let today = new Date('2025-01-01T00:00:00.000Z');
     const first = openApp({ now: () => today });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '老番茄');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -1088,7 +1188,7 @@ describe('trash retention', () => {
 
     today = new Date('2025-02-01T00:00:00.000Z');
     openApp({ databasePath: first.databasePath, directory: first.directory, now: () => today });
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.click(screen.getByRole('button', { name: '回收站' }));
     expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
@@ -1102,7 +1202,7 @@ describe('permanent cleanup', () => {
   it('asks for confirmation before permanently clearing a trashed item', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '影视飓风');
     await user.click(screen.getByRole('button', { name: '保存条目' }));
@@ -1133,7 +1233,7 @@ describe('clearing the trash', () => {
   it('permanently empties the trash after confirmation', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     for (const author of ['老番茄', '影视飓风']) {
       await user.type(screen.getByLabelText('作者'), author);
@@ -1162,7 +1262,7 @@ describe('trash and content labels', () => {
   it('drops a content label filter while its only entry is in the trash and restores it', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.type(screen.getByLabelText('作者'), '老番茄');
     await user.type(screen.getByLabelText('内容标签'), '#美食');
@@ -1191,7 +1291,7 @@ describe('trash group under a deleted collection', () => {
   it('keeps a trashed collection recoverable when its parent collection is deleted', async () => {
     const user = userEvent.setup();
     openApp();
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     await createCollection(user, 'Home', '生活');
     await createCollection(user, '生活', '科技');
     await createCollection(user, '科技', '前端');
@@ -1203,13 +1303,13 @@ describe('trash group under a deleted collection', () => {
     let dialog = await screen.findByRole('dialog', { name: '删除收藏夹？' });
     await user.click(within(dialog).getByRole('radio', { name: '收藏夹和条目移到回收站' }));
     await user.click(within(dialog).getByRole('button', { name: '删除' }));
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
 
     await user.click(screen.getByRole('button', { name: '生活' }));
     await user.click(screen.getByRole('button', { name: '删除收藏夹' }));
     dialog = await screen.findByRole('dialog', { name: '删除收藏夹？' });
     await user.click(within(dialog).getByRole('button', { name: '删除' }));
-    await screen.findByRole('heading', { name: '全部条目' });
+    await screen.findByRole('heading', { name: 'Home' });
     expect(screen.queryByRole('button', { name: '生活' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '回收站' }));

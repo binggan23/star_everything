@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; connect-src 'self' ipc: http://ipc.localhost https://*.bilibili.com https://b23.tv https://*.douyin.com https://*.iesdouyin.com https://*.xiaohongshu.com https://*.xhslink.com; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
     }
   },
   "bundle": {
