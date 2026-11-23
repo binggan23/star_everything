@@ -2,20 +2,34 @@ import { useCallback, useEffect, useId, useState } from 'react';
 
 import type {
   CollectionRepository,
+  ContentLabel,
   Entry,
   Folder,
   FolderErrorCode,
+  PlatformLabel,
   SaveErrorCode,
 } from '../data/collectionRepository';
 import { buildFolderTree, folderPath, HOME_FOLDER_ID } from '../domain/collection';
+import { matchesDiscovery } from '../domain/discovery';
+import { formatContentLabels } from '../domain/labels';
 import { EntryForm } from './EntryForm';
 import type { EntryDraft, SubmitResult } from './EntryForm';
 import { FolderPanel } from './FolderPanel';
 import { FolderTree } from './FolderTree';
+import { PlatformLabelManager } from './PlatformLabelManager';
 
 type Status = 'loading' | 'ready' | 'failed';
 
-const EMPTY_DRAFT: EntryDraft = { url: '', author: '', folderIds: [HOME_FOLDER_ID] };
+function emptyDraft(folderId: string): EntryDraft {
+  return {
+    title: '',
+    url: '',
+    author: '',
+    platformLabelId: '',
+    contentLabels: '',
+    folderIds: [folderId],
+  };
+}
 
 function saveErrorMessage(code: SaveErrorCode): string {
   switch (code) {
@@ -42,8 +56,13 @@ export function App({ repository }: { repository: CollectionRepository }) {
   const [status, setStatus] = useState<Status>('loading');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [platformLabels, setPlatformLabels] = useState<PlatformLabel[]>([]);
+  const [contentLabels, setContentLabels] = useState<ContentLabel[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [platformFilter, setPlatformFilter] = useState<string[]>([]);
+  const [contentFilter, setContentFilter] = useState<string[]>([]);
+  const [managingLabels, setManagingLabels] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -53,16 +72,29 @@ export function App({ repository }: { repository: CollectionRepository }) {
     async function load() {
       try {
         await repository.init();
-        const [nextEntries, nextFolders] = await Promise.all([
-          repository.listEntries({
-            ...(selectedFolderId === null ? {} : { folderIds: [selectedFolderId] }),
-            ...(search.trim() === '' ? {} : { search }),
-          }),
-          repository.listFolders(),
-        ]);
+        const [nextEntries, nextFolders, nextPlatformLabels, nextContentLabels] = await Promise.all(
+          [
+            repository.listEntries(
+              selectedFolderId === null ? {} : { folderIds: [selectedFolderId] },
+            ),
+            repository.listFolders(),
+            repository.listPlatformLabels(),
+            repository.listContentLabels(),
+          ],
+        );
         if (cancelled) return;
         setEntries(nextEntries);
         setFolders(nextFolders);
+        setPlatformLabels(nextPlatformLabels);
+        setContentLabels(nextContentLabels);
+        setPlatformFilter((current) =>
+          current.filter((id) => nextPlatformLabels.some((label) => label.id === id)),
+        );
+        setContentFilter((current) =>
+          current.filter((name) =>
+            nextContentLabels.some((label) => label.name.toLowerCase() === name.toLowerCase()),
+          ),
+        );
         setStatus('ready');
       } catch {
         if (!cancelled) setStatus('failed');
@@ -73,7 +105,7 @@ export function App({ repository }: { repository: CollectionRepository }) {
     return () => {
       cancelled = true;
     };
-  }, [repository, selectedFolderId, search, reloadKey]);
+  }, [repository, selectedFolderId, reloadKey]);
 
   const saveEntry = useCallback(
     async (draft: EntryDraft): Promise<SubmitResult> => {
@@ -132,6 +164,32 @@ export function App({ repository }: { repository: CollectionRepository }) {
     [repository, selectedFolderId],
   );
 
+  const createPlatformLabel = useCallback(
+    async (name: string) => {
+      const result = await repository.createPlatformLabel(name);
+      if (result.ok) setReloadKey((key) => key + 1);
+      return result;
+    },
+    [repository],
+  );
+
+  const renamePlatformLabel = useCallback(
+    async (id: string, name: string) => {
+      const result = await repository.renamePlatformLabel(id, name);
+      if (result.ok) setReloadKey((key) => key + 1);
+      return result;
+    },
+    [repository],
+  );
+
+  const deletePlatformLabel = useCallback(
+    async (id: string) => {
+      await repository.deletePlatformLabel(id);
+      setReloadKey((key) => key + 1);
+    },
+    [repository],
+  );
+
   if (status === 'loading') {
     return (
       <p className="status" role="status">
@@ -150,8 +208,30 @@ export function App({ repository }: { repository: CollectionRepository }) {
 
   const selectedFolder = folders.find((folder) => folder.id === selectedFolderId);
   const editingEntry = entries.find((entry) => entry.id === editingId) ?? null;
+  const pathsByFolder = new Map(
+    folders.map((folder) => [folder.id, folderPath(folders, folder.id)]),
+  );
+  const visibleEntries = entries.filter((entry) =>
+    matchesDiscovery(
+      {
+        ...entry,
+        folderPaths: entry.folderIds.map((id) => pathsByFolder.get(id) ?? ''),
+      },
+      {
+        search: searchQuery,
+        platformLabelIds: platformFilter,
+        contentLabelNames: contentFilter,
+      },
+    ),
+  );
+  const searchActive =
+    searchQuery.trim() !== '' || platformFilter.length > 0 || contentFilter.length > 0;
   const heading =
     selectedFolder === undefined ? '全部条目' : folderPath(folders, selectedFolder.id);
+  const emptyMessage =
+    entries.length === 0 && !searchActive && selectedFolder === undefined
+      ? '还没有收藏条目。'
+      : '没有符合条件的条目。';
 
   return (
     <div className="app">
@@ -179,20 +259,7 @@ export function App({ repository }: { repository: CollectionRepository }) {
       </nav>
 
       <main className="content">
-        <div className="content-header">
-          <h1>{heading}</h1>
-          <label htmlFor={searchId} className="visually-hidden">
-            搜索
-          </label>
-          <input
-            id={searchId}
-            type="search"
-            className="search-input"
-            autoComplete="off"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
+        <h1>{heading}</h1>
 
         {selectedFolder !== undefined && (
           <FolderPanel
@@ -205,18 +272,129 @@ export function App({ repository }: { repository: CollectionRepository }) {
           />
         )}
 
+        <form
+          className="discovery"
+          role="search"
+          aria-label="搜索与筛选"
+          onSubmit={(event) => event.preventDefault()}
+        >
+          <div className="field field-wide">
+            <label htmlFor={searchId}>搜索</label>
+            <input
+              id={searchId}
+              name="search"
+              type="search"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </div>
+
+          <fieldset className="filter-group">
+            <legend>平台标签</legend>
+            <ul className="filter-options">
+              {platformLabels.map((label) => (
+                <li key={label.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="platform"
+                      value={label.id}
+                      checked={platformFilter.includes(label.id)}
+                      onChange={(event) =>
+                        setPlatformFilter((current) =>
+                          event.target.checked
+                            ? [...current, label.id]
+                            : current.filter((id) => id !== label.id),
+                        )
+                      }
+                    />
+                    {label.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
+
+          {contentLabels.length > 0 && (
+            <fieldset className="filter-group">
+              <legend>内容标签</legend>
+              <ul className="filter-options">
+                {contentLabels.map((label) => (
+                  <li key={label.id}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        name="content"
+                        value={label.name}
+                        checked={contentFilter.includes(label.name)}
+                        onChange={(event) =>
+                          setContentFilter((current) =>
+                            event.target.checked
+                              ? [...current, label.name]
+                              : current.filter((name) => name !== label.name),
+                          )
+                        }
+                      />
+                      #{label.name}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+          )}
+
+          {searchActive && (
+            <button
+              type="button"
+              className="secondary clear-filters"
+              onClick={() => {
+                setSearchQuery('');
+                setPlatformFilter([]);
+                setContentFilter([]);
+              }}
+            >
+              清除筛选
+            </button>
+          )}
+        </form>
+
+        <button
+          type="button"
+          className="secondary label-manager-toggle"
+          aria-expanded={managingLabels}
+          aria-controls="platform-label-manager"
+          onClick={() => setManagingLabels((current) => !current)}
+        >
+          管理平台标签
+        </button>
+
+        {managingLabels && (
+          <div id="platform-label-manager">
+            <PlatformLabelManager
+              labels={platformLabels}
+              onCreate={createPlatformLabel}
+              onRename={renamePlatformLabel}
+              onDelete={deletePlatformLabel}
+            />
+          </div>
+        )}
+
         <EntryForm
           key={`${editingEntry?.id ?? 'new-entry'}-${selectedFolderId ?? 'all'}`}
           folders={folders}
+          platformLabels={platformLabels}
           initial={
             editingEntry === null
-              ? {
-                  ...EMPTY_DRAFT,
-                  folderIds: [selectedFolderId ?? HOME_FOLDER_ID],
-                }
+              ? emptyDraft(selectedFolderId ?? HOME_FOLDER_ID)
               : {
+                  title: editingEntry.title ?? '',
                   url: editingEntry.url ?? '',
                   author: editingEntry.author ?? '',
+                  platformLabelId: editingEntry.platformLabelId ?? '',
+                  contentLabels: formatContentLabels(editingEntry.contentLabels),
                   folderIds: editingEntry.folderIds,
                 }
           }
@@ -226,17 +404,14 @@ export function App({ repository }: { repository: CollectionRepository }) {
           onCancel={editingEntry === null ? undefined : () => setEditingId(null)}
         />
 
-        {entries.length === 0 ? (
-          <p className="empty">
-            {selectedFolderId === null && search.trim() === ''
-              ? '还没有收藏条目。'
-              : '没有匹配的条目。'}
-          </p>
+        {visibleEntries.length === 0 ? (
+          <p className="empty">{emptyMessage}</p>
         ) : (
           <ul className="entry-list" aria-label="收藏条目">
-            {entries.map((entry) => (
+            {visibleEntries.map((entry) => (
               <li key={entry.id} className="entry">
                 <div className="entry-text">
+                  {entry.title !== null && <span className="entry-title">{entry.title}</span>}
                   <span className="entry-primary">{entry.url ?? entry.author}</span>
                   {entry.url !== null && entry.author !== null && (
                     <span className="entry-secondary">{entry.author}</span>
@@ -244,6 +419,18 @@ export function App({ repository }: { repository: CollectionRepository }) {
                   <span className="entry-paths">
                     {entry.folderIds.map((folderId) => folderPath(folders, folderId)).join(' · ')}
                   </span>
+                  {(entry.platformLabelName !== null || entry.contentLabels.length > 0) && (
+                    <span className="entry-labels">
+                      {entry.platformLabelName !== null && (
+                        <span className="chip">{entry.platformLabelName}</span>
+                      )}
+                      {entry.contentLabels.map((label) => (
+                        <span key={label} className="chip">
+                          #{label}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </div>
                 <button type="button" className="secondary" onClick={() => setEditingId(entry.id)}>
                   编辑
