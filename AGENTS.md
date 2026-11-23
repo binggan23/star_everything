@@ -8,6 +8,9 @@ Issues and specs live as GitHub issues in `binggan23/star_everything`, managed v
 
 Five canonical roles, label strings equal to their names: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 
+### Product requirements
+- `docs/srs.md` is the canonical V1 Software Requirements Specification. Every new agent session must read it before starting project work; use it as the source of truth for product scope and acceptance criteria, and surface conflicts instead of silently changing scope.
+
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
