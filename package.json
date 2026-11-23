@@ -17,7 +17,7 @@
     "format:check": "prettier --check .",
     "audit:production": "node scripts/audit-production.mjs",
     "audit:full": "node scripts/audit-production.mjs --full",
-    "mutation:check": "stryker run",
+    "mutation:check": "stryker run --force",
     "mutation:check:incremental": "stryker run --incremental",
     "mutation:check:labels": "stryker run --mutate src/domain/labels.ts",
     "tauri": "tauri"
