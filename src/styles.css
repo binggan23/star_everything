@@ -52,7 +52,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -201,12 +202,31 @@ select {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   min-height: 2.5rem;
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--border);
   border-radius: 0.375rem;
   background: var(--bg);
+}
+
+.field textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.share-status {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
 .field input[aria-invalid='true'],

@@ -13,6 +13,7 @@ import type {
 } from '../data/collectionRepository';
 import { buildFolderTree, folderPath, HOME_FOLDER_ID } from '../domain/collection';
 import { matchesDiscovery } from '../domain/discovery';
+import type { MetadataRecognizer } from '../domain/metadata';
 import { formatContentLabels } from '../domain/labels';
 import { EntryForm } from './EntryForm';
 import type { EntryDraft, SubmitResult } from './EntryForm';
@@ -54,7 +55,13 @@ function folderErrorMessage(code: FolderErrorCode): string {
   }
 }
 
-export function App({ repository }: { repository: CollectionRepository }) {
+export function App({
+  repository,
+  recognizer,
+}: {
+  repository: CollectionRepository;
+  recognizer: MetadataRecognizer;
+}) {
   const searchId = useId();
   const [status, setStatus] = useState<Status>('loading');
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -464,6 +471,7 @@ export function App({ repository }: { repository: CollectionRepository }) {
               key={`${editingEntry?.id ?? 'new-entry'}-${selectedFolderId ?? 'all'}`}
               folders={folders}
               platformLabels={platformLabels}
+              recognizer={recognizer}
               initial={
                 editingEntry === null
                   ? emptyDraft(selectedFolderId ?? HOME_FOLDER_ID)
