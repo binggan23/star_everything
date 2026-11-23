@@ -33,7 +33,9 @@ async function openSettings(user: User) {
 afterEach(() => {
   vi.restoreAllMocks();
   for (const view of views.splice(0)) view.unmount();
-  for (const database of databases.splice(0)) database.dispose();
+  const openDatabases = databases.splice(0);
+  for (const database of openDatabases) database.close();
+  for (const database of openDatabases) database.dispose();
 });
 
 it('keeps theme and manual metadata settings after reopening the app', async () => {
