@@ -1,0 +1,260 @@
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f6f4;
+  --panel: #ffffff;
+  --text: #1d1d1f;
+  --text-muted: #5f5f66;
+  --border: #d9d9d5;
+  --accent: #2f5d50;
+  --accent-text: #ffffff;
+  --current-bg: #e4ebe7;
+  --danger: #b3261e;
+  --focus: #2f5d50;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    'Noto Sans SC',
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17171a;
+    --panel: #202024;
+    --text: #ececee;
+    --text-muted: #a4a4ac;
+    --border: #38383e;
+    --accent: #7fb8a5;
+    --accent-text: #12211c;
+    --current-bg: #2b3a34;
+    --danger: #ff8a80;
+    --focus: #a9d6c7;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  padding: 1.25rem 0.75rem;
+  border-inline-end: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.brand {
+  margin: 0 0 1.25rem;
+  padding-inline: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.folder-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-item {
+  display: block;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--current-bg);
+}
+
+.nav-item[aria-current='page'] {
+  background: var(--current-bg);
+  font-weight: 600;
+}
+
+.content {
+  width: min(48rem, 100%);
+  padding: 2rem;
+}
+
+.content h1 {
+  margin: 0 0 1.25rem;
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+
+.entry-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.field input {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg);
+}
+
+.field input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--danger);
+}
+
+.form-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 0.5rem;
+}
+
+.primary,
+.secondary {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+.primary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.secondary {
+  border: 1px solid var(--border);
+  background: transparent;
+}
+
+.secondary:hover {
+  background: var(--current-bg);
+}
+
+.entry-list {
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-block-end: 1px solid var(--border);
+}
+
+.entry-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.entry-primary {
+  overflow-wrap: anywhere;
+}
+
+.entry-secondary {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.empty {
+  margin: 1.5rem 0 0;
+  color: var(--text-muted);
+}
+
+.status {
+  padding: 2rem;
+}
+
+@media (max-width: 40rem) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--border);
+  }
+
+  .folder-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .nav-item {
+    width: auto;
+  }
+
+  .content {
+    padding: 1.25rem;
+  }
+
+  .entry-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
