@@ -21,6 +21,31 @@ function openApp(options: OpenTestRepositoryOptions = {}) {
   return { ...opened, ...view };
 }
 
+async function createCollection(
+  user: ReturnType<typeof userEvent.setup>,
+  parentName: string,
+  name: string,
+) {
+  await user.click(await screen.findByRole('button', { name: parentName }));
+  await user.click(await screen.findByRole('button', { name: '新建子收藏夹' }));
+  await user.type(screen.getByLabelText('名称'), name);
+  await user.click(screen.getByRole('button', { name: '创建' }));
+  await screen.findByRole('button', { name });
+}
+
+async function addEntryTo(
+  user: ReturnType<typeof userEvent.setup>,
+  author: string,
+  ...collectionPaths: string[]
+) {
+  for (const path of collectionPaths) {
+    await user.click(screen.getByRole('checkbox', { name: path }));
+  }
+  await user.type(screen.getByLabelText('作者'), author);
+  await user.click(screen.getByRole('button', { name: '保存条目' }));
+  await screen.findByText(author);
+}
+
 describe('collection', () => {
   it('starts with the Home root and an empty all-entries view', async () => {
     openApp();
@@ -835,5 +860,367 @@ describe('labels and discovery', () => {
     const list = screen.getByRole('list', { name: '收藏条目' });
     expect(within(list).getByText('保留作品')).toBeInTheDocument();
     expect(within(list).queryByText('Bilibili')).not.toBeInTheDocument();
+  });
+});
+
+describe('trash and recovery', () => {
+  it('moves a deleted entry to the trash and restores it', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('作者'), '老番茄');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    const row = (await screen.findByText('老番茄')).closest('li');
+    if (!row) throw new Error('missing entry row');
+    await user.click(within(row).getByRole('button', { name: '删除 老番茄' }));
+
+    await waitFor(() => expect(screen.queryByText('老番茄')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    expect(await screen.findByRole('heading', { name: '回收站' })).toBeInTheDocument();
+    const trash = screen.getByRole('list', { name: '回收站项目' });
+    expect(within(trash).getByText('老番茄')).toBeInTheDocument();
+    expect(within(trash).getByText('剩余 30 天')).toBeInTheDocument();
+
+    await user.click(within(trash).getByRole('button', { name: '恢复 老番茄' }));
+    expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    expect(await screen.findByText('老番茄')).toBeInTheDocument();
+  });
+
+  it('shows remaining retention and clears a trashed entry immediately', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('作者'), '影视飓风');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    const row = (await screen.findByText('影视飓风')).closest('li');
+    if (!row) throw new Error('missing entry row');
+    await user.click(within(row).getByRole('button', { name: '删除 影视飓风' }));
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    const trash = await screen.findByRole('list', { name: '回收站项目' });
+    expect(within(trash).getByText('剩余 30 天')).toBeInTheDocument();
+
+    await user.click(within(trash).getByRole('button', { name: '立即清除 影视飓风' }));
+    const confirm = await screen.findByRole('dialog', { name: '永久清除？' });
+    await user.click(within(confirm).getByRole('button', { name: '永久清除' }));
+    expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    expect(await screen.findByText('还没有收藏条目。')).toBeInTheDocument();
+  });
+});
+
+describe('collection deletion', () => {
+  it('explains the impact, offers both choices, and can be cancelled', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+    await createCollection(user, 'Home', '科技');
+    await createCollection(user, '科技', '前端');
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    await addEntryTo(user, '组件库', 'Home / 科技 / 前端');
+    await user.click(screen.getByRole('button', { name: '科技' }));
+
+    await user.click(screen.getByRole('button', { name: '删除收藏夹' }));
+    const dialog = await screen.findByRole('dialog', { name: '删除收藏夹？' });
+    expect(within(dialog).getByText(/1 个子收藏夹/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/1 个条目/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('radio', { name: '条目移到 Home，删除收藏夹' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('radio', { name: '收藏夹和条目移到回收站' }),
+    ).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: '取消' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Home / 科技' })).toBeInTheDocument();
+    expect(await screen.findByText('组件库')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '前端' }));
+    expect(await screen.findByRole('heading', { name: 'Home / 科技 / 前端' })).toBeInTheDocument();
+  });
+
+  it('moves entries to Home and preserves memberships outside the deleted tree', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+    await createCollection(user, 'Home', '科技');
+    await createCollection(user, 'Home', '生活');
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Home' }));
+    await addEntryTo(user, '老番茄', 'Home / 生活', 'Home / 科技');
+    const entryList = screen.getByRole('list', { name: '收藏条目' });
+    expect(within(entryList).getByText(/Home \/ 生活/)).toBeInTheDocument();
+    expect(within(entryList).getByText(/Home \/ 科技/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '科技' }));
+
+    await user.click(screen.getByRole('button', { name: '删除收藏夹' }));
+    const dialog = await screen.findByRole('dialog', { name: '删除收藏夹？' });
+    await user.click(within(dialog).getByRole('radio', { name: '条目移到 Home，删除收藏夹' }));
+    await user.click(within(dialog).getByRole('button', { name: '删除' }));
+
+    expect(await screen.findByRole('heading', { name: '全部条目' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '科技' })).not.toBeInTheDocument();
+    expect(await screen.findByText('老番茄')).toBeInTheDocument();
+    const restoredRow = screen.getByText('老番茄').closest('li');
+    if (!restoredRow) throw new Error('missing entry row');
+    expect(restoredRow).toHaveTextContent('Home');
+    expect(restoredRow).toHaveTextContent('Home / 生活');
+    expect(restoredRow).not.toHaveTextContent('Home / 科技');
+
+    await user.click(screen.getByRole('button', { name: '生活' }));
+    expect(await screen.findByText('老番茄')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Home' }));
+    expect(await screen.findByText('老番茄')).toBeInTheDocument();
+  });
+
+  it('deletes an empty collection after confirmation', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+    await createCollection(user, 'Home', '临时');
+    await user.click(screen.getByRole('button', { name: '临时' }));
+
+    await user.click(screen.getByRole('button', { name: '删除收藏夹' }));
+    const dialog = await screen.findByRole('dialog', { name: '删除收藏夹？' });
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '删除' }));
+
+    expect(await screen.findByRole('heading', { name: '全部条目' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '临时' })).not.toBeInTheDocument();
+  });
+});
+
+describe('collection trash group', () => {
+  it('moves a collection tree and its entries to the trash and restores both', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+    await createCollection(user, 'Home', '科技');
+    await createCollection(user, '科技', '前端');
+    await createCollection(user, 'Home', '生活');
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    await addEntryTo(user, '组件库', 'Home / 科技 / 前端', 'Home / 生活');
+    await user.click(screen.getByRole('button', { name: '科技' }));
+
+    await user.click(screen.getByRole('button', { name: '删除收藏夹' }));
+    const dialog = await screen.findByRole('dialog', { name: '删除收藏夹？' });
+    await user.click(within(dialog).getByRole('radio', { name: '收藏夹和条目移到回收站' }));
+    await user.click(within(dialog).getByRole('button', { name: '删除' }));
+
+    await screen.findByRole('heading', { name: '全部条目' });
+    expect(screen.queryByRole('button', { name: '科技' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '前端' })).not.toBeInTheDocument();
+    expect(screen.queryByText('组件库')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    const trash = await screen.findByRole('list', { name: '回收站项目' });
+    expect(within(trash).getByText('科技')).toBeInTheDocument();
+    expect(within(trash).getByText('收藏夹 · 2 个收藏夹 · 1 个条目')).toBeInTheDocument();
+
+    await user.click(within(trash).getByRole('button', { name: '恢复 科技' }));
+
+    expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '科技' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    expect(await screen.findByText('组件库')).toBeInTheDocument();
+    const restoredRow = screen.getByText('组件库').closest('li');
+    if (!restoredRow) throw new Error('missing entry row');
+    expect(restoredRow).toHaveTextContent('Home / 科技 / 前端');
+    expect(restoredRow).toHaveTextContent('Home / 生活');
+
+    await user.click(screen.getByRole('button', { name: '科技' }));
+    await user.click(await screen.findByRole('button', { name: '前端' }));
+    expect(await screen.findByRole('heading', { name: 'Home / 科技 / 前端' })).toBeInTheDocument();
+    expect(await screen.findByText('组件库')).toBeInTheDocument();
+  });
+});
+
+describe('trash retention', () => {
+  it('counts down the remaining retention across restarts', async () => {
+    const user = userEvent.setup();
+    let today = new Date('2025-01-01T00:00:00.000Z');
+    const first = openApp({ now: () => today });
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('作者'), '老番茄');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    const row = (await screen.findByText('老番茄')).closest('li');
+    if (!row) throw new Error('missing entry row');
+    await user.click(within(row).getByRole('button', { name: '删除 老番茄' }));
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    let trash = await screen.findByRole('list', { name: '回收站项目' });
+    expect(within(trash).getByText('剩余 30 天')).toBeInTheDocument();
+
+    first.unmount();
+    first.close();
+    opened = undefined;
+
+    today = new Date('2025-01-11T00:00:00.000Z');
+    openApp({ databasePath: first.databasePath, directory: first.directory, now: () => today });
+    await screen.findByRole('heading', { name: '全部条目' });
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    trash = await screen.findByRole('list', { name: '回收站项目' });
+    expect(within(trash).getByText('剩余 20 天')).toBeInTheDocument();
+  });
+
+  it('purges trashed items once the retention window has elapsed', async () => {
+    const user = userEvent.setup();
+    let today = new Date('2025-01-01T00:00:00.000Z');
+    const first = openApp({ now: () => today });
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('作者'), '老番茄');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    const row = (await screen.findByText('老番茄')).closest('li');
+    if (!row) throw new Error('missing entry row');
+    await user.click(within(row).getByRole('button', { name: '删除 老番茄' }));
+
+    first.unmount();
+    first.close();
+    opened = undefined;
+
+    today = new Date('2025-02-01T00:00:00.000Z');
+    openApp({ databasePath: first.databasePath, directory: first.directory, now: () => today });
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    expect(await screen.findByText('还没有收藏条目。')).toBeInTheDocument();
+  });
+});
+
+describe('permanent cleanup', () => {
+  it('asks for confirmation before permanently clearing a trashed item', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('作者'), '影视飓风');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    const row = (await screen.findByText('影视飓风')).closest('li');
+    if (!row) throw new Error('missing entry row');
+    await user.click(within(row).getByRole('button', { name: '删除 影视飓风' }));
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    const trash = await screen.findByRole('list', { name: '回收站项目' });
+    await user.click(within(trash).getByRole('button', { name: '立即清除 影视飓风' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '永久清除？' });
+    expect(within(dialog).getByText(/无法恢复/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '取消' }));
+
+    expect(screen.getByRole('list', { name: '回收站项目' })).toBeInTheDocument();
+    expect(within(trash).getByText('影视飓风')).toBeInTheDocument();
+
+    await user.click(within(trash).getByRole('button', { name: '立即清除 影视飓风' }));
+    const again = await screen.findByRole('dialog', { name: '永久清除？' });
+    await user.click(within(again).getByRole('button', { name: '永久清除' }));
+
+    expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
+  });
+});
+
+describe('clearing the trash', () => {
+  it('permanently empties the trash after confirmation', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    for (const author of ['老番茄', '影视飓风']) {
+      await user.type(screen.getByLabelText('作者'), author);
+      await user.click(screen.getByRole('button', { name: '保存条目' }));
+      const row = (await screen.findByText(author)).closest('li');
+      if (!row) throw new Error('missing entry row');
+      await user.click(within(row).getByRole('button', { name: `删除 ${author}` }));
+    }
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    await screen.findByRole('list', { name: '回收站项目' });
+    await user.click(screen.getByRole('button', { name: '立即清空回收站' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '永久清除？' });
+    expect(within(dialog).getByText(/2 个项目/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '清空回收站' }));
+
+    expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    expect(await screen.findByText('还没有收藏条目。')).toBeInTheDocument();
+  });
+});
+
+describe('trash and content labels', () => {
+  it('drops a content label filter while its only entry is in the trash and restores it', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.type(screen.getByLabelText('作者'), '老番茄');
+    await user.type(screen.getByLabelText('内容标签'), '#美食');
+    await user.click(screen.getByRole('button', { name: '保存条目' }));
+    const row = (await screen.findByText('老番茄')).closest('li');
+    if (!row) throw new Error('missing entry row');
+    expect(await screen.findByRole('checkbox', { name: '#美食' })).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: '删除 老番茄' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox', { name: '#美食' })).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    const trash = await screen.findByRole('list', { name: '回收站项目' });
+    await user.click(within(trash).getByRole('button', { name: '恢复 老番茄' }));
+    await screen.findByText('回收站是空的。');
+
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    expect(await screen.findByText('老番茄')).toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: '#美食' })).toBeInTheDocument();
+  });
+});
+
+describe('trash group under a deleted collection', () => {
+  it('keeps a trashed collection recoverable when its parent collection is deleted', async () => {
+    const user = userEvent.setup();
+    openApp();
+    await screen.findByRole('heading', { name: '全部条目' });
+    await createCollection(user, 'Home', '生活');
+    await createCollection(user, '生活', '科技');
+    await createCollection(user, '科技', '前端');
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    await addEntryTo(user, '组件库', 'Home / 生活 / 科技 / 前端');
+
+    await user.click(screen.getByRole('button', { name: '科技' }));
+    await user.click(screen.getByRole('button', { name: '删除收藏夹' }));
+    let dialog = await screen.findByRole('dialog', { name: '删除收藏夹？' });
+    await user.click(within(dialog).getByRole('radio', { name: '收藏夹和条目移到回收站' }));
+    await user.click(within(dialog).getByRole('button', { name: '删除' }));
+    await screen.findByRole('heading', { name: '全部条目' });
+
+    await user.click(screen.getByRole('button', { name: '生活' }));
+    await user.click(screen.getByRole('button', { name: '删除收藏夹' }));
+    dialog = await screen.findByRole('dialog', { name: '删除收藏夹？' });
+    await user.click(within(dialog).getByRole('button', { name: '删除' }));
+    await screen.findByRole('heading', { name: '全部条目' });
+    expect(screen.queryByRole('button', { name: '生活' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '回收站' }));
+    const trash = await screen.findByRole('list', { name: '回收站项目' });
+    expect(within(trash).getByText('科技')).toBeInTheDocument();
+    await user.click(within(trash).getByRole('button', { name: '恢复 科技' }));
+
+    expect(await screen.findByText('回收站是空的。')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '科技' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '全部条目' }));
+    expect(await screen.findByText('组件库')).toBeInTheDocument();
+    expect(screen.getByText('Home / 科技 / 前端')).toBeInTheDocument();
   });
 });

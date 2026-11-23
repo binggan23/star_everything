@@ -19,6 +19,8 @@ export type TestRepository = {
 export type OpenTestRepositoryOptions = {
   databasePath?: string;
   directory?: string;
+  /** Fixed or fake clock the repository reads for retention and expiry. */
+  now?: () => Date;
 };
 
 /**
@@ -38,7 +40,7 @@ export function openTestRepository(options: OpenTestRepositoryOptions = {}): Tes
   };
 
   return {
-    repository: createCollectionRepository(driver),
+    repository: createCollectionRepository(driver, { now: options.now }),
     databasePath,
     directory,
     close,

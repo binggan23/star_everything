@@ -88,4 +88,28 @@ export const migrations: readonly Migration[] = [
       },
     ],
   },
+  {
+    version: 4,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS trash_groups (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind IN ('entry', 'collection')),
+        label TEXT NOT NULL,
+        deleted_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS trash_groups_deleted_at ON trash_groups (deleted_at)`,
+    ],
+    columns: [
+      {
+        table: 'entries',
+        column: 'trash_group_id',
+        definition: 'TEXT REFERENCES trash_groups (id) ON DELETE CASCADE',
+      },
+      {
+        table: 'folders',
+        column: 'trash_group_id',
+        definition: 'TEXT REFERENCES trash_groups (id) ON DELETE CASCADE',
+      },
+    ],
+  },
 ];
