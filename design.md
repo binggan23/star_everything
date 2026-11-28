@@ -8,7 +8,8 @@ A desktop-first personal collection workspace for quickly finding, saving, and o
 
 - Runtime: existing TypeScript, React 19, and Tauri 2 desktop application for Linux and Windows.
 - Primary viewport: 1080 x 720. Minimum supported window: 720 x 520.
-- Use the user's React Bits references: `Scanner-JS-CSS`, `CrystalizedBall-JS-CSS`, `CardSwap-JS-CSS`, `GooeyNav-JS-CSS`, and `SpecularButton-JS-CSS`, installed through their documented `npx shadcn@latest add @react-bits/...` commands when implementation begins.
+- Use the user's React Bits references: `Scanner-JS-CSS`, `CrystalizedBall-JS-CSS`, `CardSwap-JS-CSS`, `GooeyNav-JS-CSS`, `SpecularButton-JS-CSS`, `SpringCheck-JS-CSS`, and `WakeSlider-JS-CSS`, installed through their documented `npx shadcn@latest add @react-bits/...` commands when implementation begins.
+- Icons come from Lucide (`https://lucide.dev/icons/`) as inline SVG: `folder`, `folder-open`, `folder-plus`, `trash`, `pencil`, `rotate-ccw`, `move`, `plus`, `search`, `x`, `check`, `chevron-down`, and `arrow-up`/`arrow-down`. Do not hand-draw replacement glyphs or use text characters such as `×`, `＋`, `▾`, `▸`, `⌄`, or `↑`/`↓` where a Lucide icon exists — this includes table sort affordances. Size icons at 13-16px, keep `stroke-width` 2, and never let an SVG inherit an unsized container.
 - These references define interaction and effect primitives; adapt them to the existing app rather than changing the data layer or adding unrelated UI systems.
 
 ## Application flow
@@ -45,7 +46,7 @@ Purpose: browse the folder hierarchy and the entries held in a selected folder.
 
 - Show a folder tree and the selected folder's entries together in the same page.
 - The tree supports expand/collapse, a distinct selected state, entry counts, and independent scrolling when long.
-- Each folder exposes a context menu for creating a child folder, renaming, moving, and deleting. Preserve deletion impact confirmation and both existing deletion modes.
+- Each folder exposes a menu for creating a child folder, renaming, moving, and deleting. The row itself stays the selection target, so the menu affordance is an icon button that appears on hover or focus instead of a second visible link. Preserve deletion impact confirmation and both existing deletion modes.
 - Selecting a folder shows entries associated with that folder and all descendants. Support entries belonging to multiple folders.
 - Reuse the Filter page's table and Add Collection dialog rather than creating a second implementation.
 
@@ -74,10 +75,24 @@ Preserve existing capabilities and group them for scanning:
 - Require URL or author, allow either alone, preserve the original URL including query parameters, and never overwrite manually entered metadata with recognition results.
 - Recognition failure must not block manual saving. Keep focus management, validation feedback, and keyboard dismissal accessible.
 - The primary save action uses the SpecularButton reference with a restrained edge glow. Avoid persistent UI copy that merely explains business rules.
+- Every button surface uses the SpecularButton reference with an 18px radius, including header actions, dialog footers, folder actions, and settings actions. Tones only change the specular line color and tint: plain, primary, danger.
+- Both themes carry the same Dusk accent family, but the components whose colors live in WebGL shaders or CSS variables (the specular buttons and container rims, the GooeyNav pill, SpringCheck fills, the WakeSlider bars) need an explicit light set — the dark set washes out on a light surface. Anything that previews a page, such as the CardSwap previews, follows the active theme too; nothing should preview a palette the app is not currently using.
+- Page containers (the table shell, folder tree panel, row-detail pane, and settings sections) also use the SpecularButton rim: the same shader on the container edge with a much lower intensity than a button, so it reads as a lit border rather than a control. All page-container corners are 15px; buttons stay at 18px.
+- The collection table keeps its full set of columns. On wide windows it keeps naturally sized columns inside its own scroll container; once the list itself is narrower than the six columns need (measured on the list container, not the window, so an open detail pane counts), columns compress with a fixed layout and wrapped cell text so nothing is clipped behind the scroll edge. Wrapping breaks a word only when the cell truly cannot hold it, so names stay whole wherever they fit. Saved-time and remaining-days values stay on one line.
+- Value sliders — currently the panel opacity control in Settings — use the `WakeSlider` reference instead of a native `input[type=range]`: equalizer bars that wake up around the handle while dragging, with the same Dusk fill/track colors and a visible percentage readout beside it.
 
 ## Interaction, motion, and accessibility
 
 - Provide visible focus, semantic names, keyboard operation, and appropriate focus return for CardSwap, dialogs, tree controls, menus, and table header controls.
+- Use the `SpringCheck` reference for every checkbox-style control, including sort and filter options in the table column dialog, the folder assignment list in the collection dialog, and the on/off toggles in Settings. Selection is conveyed by the SpringCheck tick/fill animation, not by darkening a row or panel background; a switch-shaped control is never used.
+- Hide the browser's own scrollbar chrome (`::-webkit-scrollbar` for WebKit/Chromium and `scrollbar-width: none` for Firefox) on every scrolling region, including dialogs and menus that mount on demand. Scrolling itself stays native — wheel, trackpad, keyboard, and focus behavior are unchanged — so no custom scrollbar track replaces it.
+- Side panes enter from their own edge: a pane docked on the right slides in from the right, a pane docked on the left slides in from the left. The pane must not fade in place or fly in from the opposite side, and the motion is skipped under reduced motion.
+
+## Entry and row detail
+
+- The entry screen uses the `CrystalizedBall` eclipse configuration with a white tint and its full particle count. Only the small top-left ball shown after entering uses the sparser, tinted configuration. Returning to the entry screen moves the small ball from the top-left corner to the centre instead of cutting to a new screen.
+- Row detail is a sibling pane at the same level as the collection list, not a modal dialog. It opens on the right of the collection page and on the left of the filter and trash pages, from its own edge. While the list still has room for its columns, the pane docks beside it, shares its height, and pushes the list instead of covering it. Once docking would squeeze the list below usability, the pane becomes a side sheet on the same edge rather than shrinking the list into a sliver.
+- Row-level actions (edit, move to trash, restore, delete permanently) are icon buttons in the pane's top corner. They replace the table action column entirely; the row itself is the entry point.
 - The Scanner's moving content is decorative and non-interactive. The reduced-motion preference must provide a static or substantially reduced-motion background while retaining readable color and contrast.
 - Keep all function and content readable over Scanner at both themes and across loading, empty, error, and confirmation states.
 - Use transitions only to explain entry, navigation, and selection. Do not delay access to the selected page with ornamental animation.
