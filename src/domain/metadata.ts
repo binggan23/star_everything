@@ -164,9 +164,9 @@ function parseDouyinShareText(input: string): { title: string | null; author: st
   const beforeUrl = remainder.split(/https?:\/\//iu)[0] ?? '';
   let title = cleanShareTitle(beforeUrl);
 
-  if (title === null && authorMatch === null) {
+  if (authorMatch === null) {
     const bracket = input.match(/【([^】]+)】/u);
-    title = bracket?.[1] === undefined ? null : cleanShareTitle(bracket[1]);
+    if (bracket?.[1] !== undefined) title = cleanShareTitle(bracket[1]);
   }
 
   return { title, author };

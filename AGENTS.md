@@ -36,3 +36,8 @@ Single-context: one `GLOSSARY.md` plus `docs/adr/` at the repo root. See `docs/a
 ## 开发验证
 
 - 执行测试、构建、格式、Rust、依赖审计、变异测试或桌面打包任务时，先读取 [`docs/agents/verification.md`](docs/agents/verification.md)；该文件是本地命令与 CI 职责的单一入口。
+
+## 截图与上下文
+
+- 读取截图前先删除 `/tmp` 里过期的旧图，避免累积。会话上下文（含图片）有约 10 MiB 的上限，超限会导致请求失败。
+- 验证用截图默认 `deviceScaleFactor: 1` 并输出 JPEG；只有需要看清细节时才用 2 倍图，且一次会话内少量使用。

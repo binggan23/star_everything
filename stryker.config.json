@@ -21,6 +21,6 @@
   "timeoutMS": 30000,
   "timeoutFactor": 2,
   "thresholds": {
-    "break": null
+    "break": 90
   }
 }
